@@ -13,8 +13,12 @@ const startServer = async () => {
     const server = http.createServer(app);
     const io = new Server(server, {
         cors: { origin: "*" },
-        pingTimeout: 60000,
-        pingInterval: 25000
+        pingTimeout: 30000,
+        pingInterval: 25000,
+        connectionStateRecovery: {
+            maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes recovery window
+            skipMiddlewares: true,
+        }
     });
 
     // Pass IO to app
