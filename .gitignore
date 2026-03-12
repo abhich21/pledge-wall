@@ -1,0 +1,7 @@
+node_modules/
+.env
+uploads/
+pledge-wall.db
+pledge-wall.json
+.DS_Store
+*.log

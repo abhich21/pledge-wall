@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeTheChange | Snap a Picture</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .camera-box {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 3/4;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        #video,
+        #canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .shutter-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 64px;
+            height: 64px;
+            background: white;
+            border-radius: 50%;
+            border: 4px solid rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+        }
+
+        .preview-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: -12px;
+            position: relative;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <a href="pledge.html" class="back-btn">&larr;</a>
+    </header>
+
+    <div class="container">
+        <h2 class="text-center text-blue" style="margin-bottom: 24px;">Snap a picture of yourself</h2>
+
+        <div class="camera-box">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas" class="hidden"></canvas>
+            <button id="shutter" class="shutter-btn"></button>
+        </div>
+
+        <div id="controls" class="hidden">
+            <div class="preview-controls">
+                <button id="retake" class="btn-secondary" style="flex: 1;">Retake</button>
+            </div>
+            <button id="upload" class="btn-primary" style="margin-top: 20px;">Upload Pledge</button>
+        </div>
+
+        <p class="text-center" style="font-size: 14px; color: #666; margin-top: 10px;">
+            Your photo will be framed and added to the wall!
+        </p>
+    </div>
+
+    <div id="loading" class="loading-overlay hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const shutter = document.getElementById('shutter');
+        const retake = document.getElementById('retake');
+        const uploadBtn = document.getElementById('upload');
+        const controls = document.getElementById('controls');
+        const loading = document.getElementById('loading');
+
+        let stream;
+        let activeFrameImg = new Image();
+
+        // Load active frame first
+        fetch('/api/frame/active')
+            .then(res => res.json())
+            .then(data => {
+                activeFrameImg.src = data.url;
+            })
+            .catch(err => {
+                console.error('Failed to load frame', err);
+                activeFrameImg.src = '/assets/default-frame.png';
+            });
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1440 } }
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                alert('Please allow camera access to take a photo.');
+                console.error(err);
+            }
+        }
+
+        shutter.onclick = () => {
+            const ctx = canvas.getContext('2d');
+            canvas.width = 1000;
+            canvas.height = 1200;
+
+            // Draw video (mirror if needed, but standard usually fine)
+            ctx.drawImage(video, 0, 0, 1000, 1200);
+
+            // Draw frame on top
+            if (activeFrameImg.complete) {
+                ctx.drawImage(activeFrameImg, 0, 0, 1000, 1200);
+            }
+
+            video.classList.add('hidden');
+            canvas.classList.remove('hidden');
+            shutter.classList.add('hidden');
+            controls.classList.remove('hidden');
+
+            // Stop camera
+            stream.getTracks().forEach(track => track.stop());
+        };
+
+        retake.onclick = () => {
+            video.classList.remove('hidden');
+            canvas.classList.add('hidden');
+            shutter.classList.remove('hidden');
+            controls.classList.add('hidden');
+            startCamera();
+        };
+
+        uploadBtn.onclick = async () => {
+            loading.classList.remove('hidden');
+
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('photo', blob, 'pledge.jpg');
+                formData.append('name', sessionStorage.getItem('pledge_name'));
+                formData.append('organisation', sessionStorage.getItem('pledge_org') || '');
+                formData.append('message', sessionStorage.getItem('pledge_msg') || '');
+
+                try {
+                    const res = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+
+                    if (data.jobId) {
+                        pollStatus(data.jobId);
+                    } else {
+                        alert(data.error || 'Upload failed');
+                        loading.classList.add('hidden');
+                    }
+                } catch (err) {
+                    alert('Upload failed. Please try again.');
+                    loading.classList.add('hidden');
+                }
+            }, 'image/jpeg', 0.85);
+        };
+
+        async function pollStatus(jobId) {
+            const interval = setInterval(async () => {
+                const res = await fetch(`/api/upload/status/${jobId}`);
+                const data = await res.json();
+
+                if (data.status === 'done') {
+                    clearInterval(interval);
+                    sessionStorage.setItem('last_photo', data.photo.photo_url);
+                    window.location.href = 'success.html';
+                } else if (data.status === 'error') {
+                    clearInterval(interval);
+                    alert('Failed to process photo: ' + data.error);
+                    loading.classList.add('hidden');
+                }
+            }, 2000);
+        }
+
+        startCamera();
+    </script>
+</body>
+
+</html>

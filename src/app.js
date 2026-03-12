@@ -1,0 +1,210 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const rateLimit = require('express-rate-limit');
+const multer = require('multer');
+const fs = require('fs');
+
+const { verifyToken, signToken } = require('./middleware/auth');
+const Pledge = require('./models/Pledge');
+const Frame = require('./models/Frame');
+const cache = require('./services/cache');
+const queue = require('./services/queue');
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Rate Limiting
+const globalLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 100,
+    message: { error: "Too many requests." }
+});
+app.use(globalLimiter);
+
+const uploadLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    max: 3,
+    message: { error: "Too many uploads." }
+});
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { error: "Too many login attempts." }
+});
+
+// Multer
+const upload = multer({ dest: 'uploads/temp/' });
+
+// Static
+const rootDir = path.join(__dirname, '..');
+app.use(express.static(path.join(rootDir, 'public')));
+app.use('/uploads', express.static(path.join(rootDir, 'uploads'), { maxAge: '1h' }));
+
+// Set IO on app for use in routes
+app.set('socketio', null);
+
+// --- PUBLIC API ---
+
+app.get('/api/photos', (req, res) => res.json(cache.getPhotos()));
+
+app.get('/api/photos/since/:timestamp', (req, res) => {
+    res.json(cache.getPhotosSince(req.params.timestamp));
+});
+
+app.get('/api/frame/active', async (req, res) => {
+    try {
+        const frame = await Frame.findOne({ is_active: true }).lean();
+        res.json({ url: frame ? frame.file_path : '/assets/default-frame.png' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/upload', uploadLimiter, upload.single('photo'), (req, res) => {
+    const { name, organisation, message } = req.body;
+    if (!name || !req.file) return res.status(400).json({ error: 'Name/photo required' });
+
+    const jobId = queue.addJob({
+        name, organisation, message,
+        photoPath: req.file.path,
+        io: app.get('socketio')
+    });
+    res.status(202).json({ jobId });
+});
+
+app.get('/api/upload/status/:jobId', (req, res) => {
+    const status = queue.getJobStatus(req.params.jobId);
+    if (!status) return res.status(404).json({ error: 'Not found' });
+    res.json(status);
+});
+
+// Admin
+app.post('/api/admin/login', loginLimiter, (req, res) => {
+    const { email, password } = req.body;
+    if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+        return res.json({ token: signToken({ email }) });
+    }
+    res.status(401).json({ error: 'Invalid credentials' });
+});
+
+app.get('/api/admin/verify', verifyToken, (req, res) => res.json({ valid: true }));
+
+app.get('/api/admin/photos', verifyToken, async (req, res) => {
+    try {
+        const photos = await Pledge.find().sort({ created_at: -1 }).lean();
+        res.json(photos);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.patch('/api/admin/photos/:id/status', verifyToken, async (req, res) => {
+    const { status } = req.body;
+    const { id } = req.params;
+
+    try {
+        const photo = await Pledge.findByIdAndUpdate(id, { status }, { new: true }).lean();
+        if (!photo) return res.status(404).json({ error: 'Not found' });
+
+        const io = app.get('socketio');
+        if (status === 'approved') {
+            cache.addPhoto(photo);
+            if (io) io.of('/wall').emit('new_photo', photo);
+        } else {
+            cache.removePhoto(id);
+            if (io) io.of('/wall').emit('photo_deleted', { id });
+        }
+        res.json({ message: 'Updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/admin/photos/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const photo = await Pledge.findByIdAndDelete(id).lean();
+        if (photo) {
+            const fullPath = path.join(__dirname, '..', photo.photo_url);
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        }
+        cache.removePhoto(id);
+        const io = app.get('socketio');
+        if (io) io.of('/wall').emit('photo_deleted', { id });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/admin/photos/archive-all', verifyToken, async (req, res) => {
+    try {
+        await Pledge.updateMany({ status: 'approved' }, { status: 'archived' });
+        cache.clearCache();
+        const io = app.get('socketio');
+        if (io) io.of('/wall').emit('wall_cleared', {});
+        res.json({ message: 'All photos archived' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/admin/photos/delete-all', verifyToken, async (req, res) => {
+    try {
+        const photos = await Pledge.find().lean();
+        photos.forEach(p => {
+            const fullPath = path.join(__dirname, '..', p.photo_url);
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        });
+        await Pledge.deleteMany({});
+        cache.clearCache();
+        const io = app.get('socketio');
+        if (io) io.of('/wall').emit('wall_cleared', {});
+        res.json({ message: 'All photos deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/admin/frame', verifyToken, upload.single('frame'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const filename = `frame_${Date.now()}${path.extname(req.file.originalname)}`;
+    const targetDir = path.join(__dirname, '../public/assets/frames');
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+
+    const targetPath = path.join(targetDir, filename);
+    const frameUrl = `/assets/frames/${filename}`;
+
+    fs.renameSync(req.file.path, targetPath);
+
+    try {
+        await Frame.updateMany({}, { is_active: false });
+        await Frame.create({
+            name: req.file.originalname,
+            file_path: frameUrl,
+            is_active: true
+        });
+        res.json({ url: frameUrl });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/admin/frame/reset', verifyToken, async (req, res) => {
+    try {
+        await Frame.updateMany({}, { is_active: false });
+        await Frame.findOneAndUpdate({ file_path: '/assets/default-frame.png' }, { is_active: true });
+        res.json({ message: 'Frame reset to default' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+module.exports = app;
