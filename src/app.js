@@ -13,10 +13,28 @@ const queue = require('./services/queue');
 
 const app = express();
 
+/**
+ * Payload Validator Utility
+ */
+const validatePayload = (data, schema) => {
+    for (const key in schema) {
+        if (schema[key].required && (data[key] === undefined || data[key] === null || data[key] === '')) {
+            throw new Error(`Field ${key} is required`);
+        }
+        if (data[key] && typeof data[key] !== schema[key].type) {
+            throw new Error(`Field ${key} must be of type ${schema[key].type}`);
+        }
+        if (data[key] && schema[key].maxLength && data[key].length > schema[key].maxLength) {
+            throw new Error(`Field ${key} exceeds maximum length of ${schema[key].maxLength}`);
+        }
+    }
+    return true;
+};
+
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Rate Limiting
 const globalLimiter = rateLimit({
@@ -39,7 +57,10 @@ const loginLimiter = rateLimit({
 });
 
 // Multer
-const upload = multer({ dest: 'uploads/temp/' });
+const upload = multer({
+    dest: 'uploads/temp/',
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
 
 // Static
 const rootDir = path.join(__dirname, '..');
@@ -67,15 +88,27 @@ app.get('/api/frame/active', async (req, res) => {
 });
 
 app.post('/api/upload', uploadLimiter, upload.single('photo'), (req, res) => {
-    const { name, organisation, message } = req.body;
-    if (!name || !req.file) return res.status(400).json({ error: 'Name/photo required' });
+    try {
+        const { name, organisation, message } = req.body;
 
-    const jobId = queue.addJob({
-        name, organisation, message,
-        photoPath: req.file.path,
-        io: app.get('socketio')
-    });
-    res.status(202).json({ jobId });
+        validatePayload(req.body, {
+            name: { type: 'string', required: true, maxLength: 50 },
+            organisation: { type: 'string', maxLength: 50 },
+            message: { type: 'string', maxLength: 200 }
+        });
+
+        if (!req.file) return res.status(400).json({ error: 'Photo required' });
+
+        const jobId = queue.addJob({
+            name, organisation, message,
+            photoPath: req.file.path,
+            io: app.get('socketio')
+        });
+        res.status(202).json({ jobId });
+    } catch (err) {
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(400).json({ error: err.message });
+    }
 });
 
 app.get('/api/upload/status/:jobId', (req, res) => {
@@ -108,6 +141,10 @@ app.patch('/api/admin/photos/:id/status', verifyToken, async (req, res) => {
     const { status } = req.body;
     const { id } = req.params;
 
+    if (!['approved', 'rejected', 'archived'].includes(status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+    }
+
     try {
         const photo = await Pledge.findByIdAndUpdate(id, { status }, { new: true }).lean();
         if (!photo) return res.status(404).json({ error: 'Not found' });
@@ -138,70 +175,6 @@ app.delete('/api/admin/photos/:id', verifyToken, async (req, res) => {
         const io = app.get('socketio');
         if (io) io.of('/wall').emit('photo_deleted', { id });
         res.json({ message: 'Deleted' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/admin/photos/archive-all', verifyToken, async (req, res) => {
-    try {
-        await Pledge.updateMany({ status: 'approved' }, { status: 'archived' });
-        cache.clearCache();
-        const io = app.get('socketio');
-        if (io) io.of('/wall').emit('wall_cleared', {});
-        res.json({ message: 'All photos archived' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.delete('/api/admin/photos/delete-all', verifyToken, async (req, res) => {
-    try {
-        const photos = await Pledge.find().lean();
-        photos.forEach(p => {
-            const fullPath = path.join(__dirname, '..', p.photo_url);
-            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-        });
-        await Pledge.deleteMany({});
-        cache.clearCache();
-        const io = app.get('socketio');
-        if (io) io.of('/wall').emit('wall_cleared', {});
-        res.json({ message: 'All photos deleted' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/admin/frame', verifyToken, upload.single('frame'), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-    const filename = `frame_${Date.now()}${path.extname(req.file.originalname)}`;
-    const targetDir = path.join(__dirname, '../public/assets/frames');
-    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-
-    const targetPath = path.join(targetDir, filename);
-    const frameUrl = `/assets/frames/${filename}`;
-
-    fs.renameSync(req.file.path, targetPath);
-
-    try {
-        await Frame.updateMany({}, { is_active: false });
-        await Frame.create({
-            name: req.file.originalname,
-            file_path: frameUrl,
-            is_active: true
-        });
-        res.json({ url: frameUrl });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-app.post('/api/admin/frame/reset', verifyToken, async (req, res) => {
-    try {
-        await Frame.updateMany({}, { is_active: false });
-        await Frame.findOneAndUpdate({ file_path: '/assets/default-frame.png' }, { is_active: true });
-        res.json({ message: 'Frame reset to default' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
