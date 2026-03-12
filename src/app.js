@@ -4,6 +4,8 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const fs = require('fs');
+const morgan = require('morgan');
+const logger = require('./utils/logger');
 
 const { verifyToken, signToken } = require('./middleware/auth');
 const Pledge = require('./models/Pledge');
@@ -32,6 +34,7 @@ const validatePayload = (data, schema) => {
 };
 
 // Middleware
+app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -121,8 +124,10 @@ app.get('/api/upload/status/:jobId', (req, res) => {
 app.post('/api/admin/login', loginLimiter, (req, res) => {
     const { email, password } = req.body;
     if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+        logger.info('🔐 Admin login success for: %s', email);
         return res.json({ token: signToken({ email }) });
     }
+    logger.warn('⚠️ Admin login failed for: %s', email);
     res.status(401).json({ error: 'Invalid credentials' });
 });
 
@@ -131,8 +136,10 @@ app.get('/api/admin/verify', verifyToken, (req, res) => res.json({ valid: true }
 app.get('/api/admin/photos', verifyToken, async (req, res) => {
     try {
         const photos = await Pledge.find().sort({ created_at: -1 }).lean();
+        logger.debug('📷 Fetched %d photos for admin panel', photos.length);
         res.json(photos);
     } catch (err) {
+        logger.error('❌ Failed to fetch admin photos: %o', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -149,6 +156,8 @@ app.patch('/api/admin/photos/:id/status', verifyToken, async (req, res) => {
         const photo = await Pledge.findByIdAndUpdate(id, { status }, { new: true }).lean();
         if (!photo) return res.status(404).json({ error: 'Not found' });
 
+        logger.info('⚖️ Photo %s status changed to %s', id, status);
+
         const io = app.get('socketio');
         if (status === 'approved') {
             cache.addPhoto(photo);
@@ -159,6 +168,7 @@ app.patch('/api/admin/photos/:id/status', verifyToken, async (req, res) => {
         }
         res.json({ message: 'Updated' });
     } catch (err) {
+        logger.error('❌ Failed to update photo status: %o', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -170,12 +180,14 @@ app.delete('/api/admin/photos/:id', verifyToken, async (req, res) => {
         if (photo) {
             const fullPath = path.join(__dirname, '..', photo.photo_url);
             if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            logger.info('🗑️ Photo %s deleted and file removed', id);
         }
         cache.removePhoto(id);
         const io = app.get('socketio');
         if (io) io.of('/wall').emit('photo_deleted', { id });
         res.json({ message: 'Deleted' });
     } catch (err) {
+        logger.error('❌ Failed to delete photo: %o', err);
         res.status(500).json({ error: err.message });
     }
 });

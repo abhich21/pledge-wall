@@ -1,4 +1,5 @@
 const { default: PQueue } = require('p-queue');
+const logger = require('../utils/logger');
 const Jimp = require('jimp');
 const path = require('path');
 const fs = require('fs');
@@ -16,6 +17,7 @@ const jobs = new Map();
  */
 const processPhoto = async (jobId, { name, organisation, message, photoPath, io }) => {
     jobs.set(jobId, { status: 'processing', progress: 0 });
+    logger.info('⚙️ Starting processing for Job: %s (User: %s)', jobId, name);
 
     try {
         const uploadsDir = path.join(__dirname, '../../uploads/photos');
@@ -30,16 +32,19 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
         const framePath = activeFrame ? path.join(__dirname, '../../public', activeFrame.file_path) : null;
 
         // Photo processing with Jimp
+        logger.debug('📸 Reading photo for Job: %s', jobId);
         const image = await Jimp.read(photoPath);
         image.cover(1200, 1200);
 
         if (framePath && fs.existsSync(framePath)) {
+            logger.debug('🖼️ Applying frame %s to Job: %s', activeFrame.name, jobId);
             const frame = await Jimp.read(framePath);
             frame.resize(1200, 1200);
             image.composite(frame, 0, 0);
         }
 
         await image.quality(85).writeAsync(finalPath);
+        logger.debug('💾 Image processed and saved to disk: %s', photoUrl);
 
         // Save to MongoDB
         const newPledge = new Pledge({
@@ -52,6 +57,7 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
 
         const savedPledge = await newPledge.save();
         const photoObj = savedPledge.toObject();
+        logger.info('📝 Pledge saved to Database: %s', photoObj._id);
 
         // Update cache
         cache.addPhoto(photoObj);
@@ -59,22 +65,25 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
         // Notify wall
         if (io) {
             io.of('/wall').emit('new_photo', photoObj);
+            logger.debug('📣 Socket event emitted to /wall for Job: %s', jobId);
         }
 
         jobs.set(jobId, { status: 'done', photo: photoObj });
+        logger.info('✅ Processing completed successfully for Job: %s', jobId);
 
         // Clean up temp upload
         if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
 
     } catch (err) {
-        console.error('❌ Queue processing error:', err);
+        logger.error('❌ Queue processing error for Job %s: %o', jobId, err);
         jobs.set(jobId, { status: 'error', error: err.message });
     }
 };
 
 const addJob = (jobData) => {
-    const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const jobId = `job_${Date.now()}_${Math.round(Math.random() * 1e9)}`;
     jobs.set(jobId, { status: 'queued' });
+    logger.info('📥 Job queued: %s (Queue size: %d)', jobId, queue.size + 1);
 
     queue.add(() => processPhoto(jobId, jobData));
 

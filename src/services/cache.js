@@ -1,4 +1,5 @@
 const Pledge = require('../models/Pledge');
+const logger = require('../utils/logger');
 
 let photoCache = [];
 
@@ -13,9 +14,9 @@ const initCache = async () => {
             .lean(); // Faster, returns plain JS objects
 
         photoCache = photos.reverse(); // Store in chronological order for easier wall appending
-        console.log(`✅ Cache initialized with ${photoCache.length} photos`);
+        logger.info(`✅ Cache initialized with ${photoCache.length} photos`);
     } catch (err) {
-        console.error('❌ Cache initialization error:', err);
+        logger.error('❌ Cache initialization error: %o', err);
     }
 };
 

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const logger = require('../utils/logger');
 require('dotenv').config();
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/pledge-wall';
@@ -29,9 +30,8 @@ const connectDB = async () => {
 
     try {
         cached.conn = await cached.promise;
-        console.log('✅ Connected to MongoDB (Singleton)');
+        logger.info('✅ Connected to MongoDB (Singleton)');
 
-        // Seed default frame if none exists
         const Frame = require('./Frame');
         const frameCount = await Frame.countDocuments();
         if (frameCount === 0) {
@@ -40,11 +40,11 @@ const connectDB = async () => {
                 file_path: '/assets/default-frame.png',
                 is_active: true
             });
-            console.log('🌱 Default frame seeded');
+            logger.info('🌱 Default frame seeded');
         }
     } catch (err) {
         cached.promise = null;
-        console.error('❌ MongoDB Connection Error:', err.message);
+        logger.error('❌ MongoDB Connection Error: %o', err);
         process.exit(1);
     }
     return cached.conn;

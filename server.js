@@ -7,10 +7,11 @@ const { setupWorker } = require('@socket.io/cluster-adapter');
 const app = require('./src/app');
 const connectDB = require('./src/models/db');
 const cache = require('./src/services/cache');
+const logger = require('./src/utils/logger');
 
 const startServer = async () => {
     if (cluster.isMaster) {
-        console.log(`\n🏰 Master Process ${process.pid} is running`);
+        logger.info(`🏰 Master Process ${process.pid} is running`);
 
         // Connect DB once in master for seeding/cache init if needed
         // but workers will each have their own connection pool via Singleton
@@ -22,8 +23,8 @@ const startServer = async () => {
             cluster.fork();
         }
 
-        cluster.on('exit', (worker, code, signal) => {
-            console.log(`⚠️ Worker ${worker.process.pid} died. Forking new worker...`);
+        cluster.on('exit', (worker) => {
+            logger.warn(`⚠️ Worker ${worker.process.pid} died. Forking new worker...`);
             cluster.fork();
         });
     } else {
@@ -48,20 +49,24 @@ const startServer = async () => {
 
         // Socket Namespaces
         io.of('/wall').on('connection', (socket) => {
+            logger.debug(`📡 Socket connected to /wall: ${socket.id}`);
             socket.join('wall');
+            socket.on('disconnect', () => logger.debug(`❌ Socket disconnected from /wall: ${socket.id}`));
         });
 
         io.of('/admin').on('connection', (socket) => {
+            logger.debug(`🔐 Admin Socket connected: ${socket.id}`);
             socket.join('admin');
+            socket.on('disconnect', () => logger.debug(`❌ Admin Socket disconnected: ${socket.id}`));
         });
 
         const PORT = process.env.PORT || 3000;
         server.listen(PORT, () => {
-            console.log(`🚀 Worker ${process.pid} started at http://localhost:${PORT}`);
+            logger.info(`🚀 Worker ${process.pid} started at http://localhost:${PORT}`);
         });
     }
 };
 
 startServer().catch(err => {
-    console.error('Failed to start server:', err);
+    logger.error('Failed to start server: %o', err);
 });

@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const logger = require('../utils/logger');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_for_dev_only_change_in_prod';
@@ -19,6 +20,7 @@ const verifyToken = (req, res, next) => {
         req.user = verified;
         next();
     } catch (err) {
+        logger.warn('Failed token verification attempt from IP: %s - Reason: %s', req.ip, err.message);
         res.status(401).json({ error: 'Invalid or expired token.' });
     }
 };
