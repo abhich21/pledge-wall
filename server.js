@@ -9,14 +9,37 @@ const connectDB = require('./src/models/db');
 const cache = require('./src/services/cache');
 const logger = require('./src/utils/logger');
 
-const startServer = async () => {
-    if (cluster.isMaster) {
-        logger.info(`🏰 Master Process ${process.pid} is running`);
+const logRoutes = (port) => {
+    const baseUrl = `http://localhost:${port}`;
+    logger.info('--- Frontend Routes ---');
+    logger.info(`🏠 Home:      ${baseUrl}/`);
+    logger.info(`📝 Pledge:    ${baseUrl}/pledge`);
+    logger.info(`📸 Camera:    ${baseUrl}/camera`);
+    logger.info(`✅ Success:   ${baseUrl}/success`);
+    logger.info(`📺 Wall:      ${baseUrl}/wall`);
+    logger.info(`🔐 Admin:     ${baseUrl}/admin`);
+    logger.info(`📊 Dashboard: ${baseUrl}/admin/dashboard`);
+    logger.info('-----------------------');
+};
 
-        // Connect DB once in master for seeding/cache init if needed
-        // but workers will each have their own connection pool via Singleton
+const startServer = async () => {
+    const PORT = process.env.PORT || 3000;
+
+    // If single core, run directly without cluster overhead
+    if (numCPUs <= 1) {
+        logger.info('⚙️ Single core detected. Running in single-process mode.');
         await connectDB();
         await cache.initCache();
+        logRoutes(PORT);
+        runWorker();
+        return;
+    }
+
+    if (cluster.isMaster) {
+        logger.info(`🏰 Master Process ${process.pid} is running (Detected ${numCPUs} cores)`);
+        await connectDB();
+        await cache.initCache();
+        logRoutes(PORT);
 
         // Fork workers
         for (let i = 0; i < numCPUs; i++) {
@@ -28,43 +51,43 @@ const startServer = async () => {
             cluster.fork();
         });
     } else {
-        // Worker Process
         await connectDB();
-
-        const server = http.createServer(app);
-        const io = new Server(server, {
-            cors: { origin: "*" },
-            transports: ['websocket'], // Enforce websocket for performance
-            pingTimeout: 30000,
-            pingInterval: 25000,
-            maxHttpBufferSize: 1e6, // 1MB limit
-            connectionStateRecovery: {
-                maxDisconnectionDuration: 2 * 60 * 1000,
-                skipMiddlewares: true,
-            }
-        });
-
-        // Pass IO to app
-        app.set('socketio', io);
-
-        // Socket Namespaces
-        io.of('/wall').on('connection', (socket) => {
-            logger.debug(`📡 Socket connected to /wall: ${socket.id}`);
-            socket.join('wall');
-            socket.on('disconnect', () => logger.debug(`❌ Socket disconnected from /wall: ${socket.id}`));
-        });
-
-        io.of('/admin').on('connection', (socket) => {
-            logger.debug(`🔐 Admin Socket connected: ${socket.id}`);
-            socket.join('admin');
-            socket.on('disconnect', () => logger.debug(`❌ Admin Socket disconnected: ${socket.id}`));
-        });
-
-        const PORT = process.env.PORT || 3000;
-        server.listen(PORT, () => {
-            logger.info(`🚀 Worker ${process.pid} started at http://localhost:${PORT}`);
-        });
+        runWorker();
     }
+};
+
+const runWorker = () => {
+    const server = http.createServer(app);
+    const io = new Server(server, {
+        cors: { origin: "*" },
+        transports: ['websocket'],
+        pingTimeout: 30000,
+        pingInterval: 25000,
+        maxHttpBufferSize: 1e6,
+        connectionStateRecovery: {
+            maxDisconnectionDuration: 2 * 60 * 1000,
+            skipMiddlewares: true,
+        }
+    });
+
+    app.set('socketio', io);
+
+    io.of('/wall').on('connection', (socket) => {
+        logger.debug(`📡 Socket connected to /wall: ${socket.id}`);
+        socket.join('wall');
+        socket.on('disconnect', () => logger.debug(`❌ Socket disconnected from /wall: ${socket.id}`));
+    });
+
+    io.of('/admin').on('connection', (socket) => {
+        logger.debug(`🔐 Admin Socket connected: ${socket.id}`);
+        socket.join('admin');
+        socket.on('disconnect', () => logger.debug(`❌ Admin Socket disconnected: ${socket.id}`));
+    });
+
+    const PORT = process.env.PORT || 3000;
+    server.listen(PORT, () => {
+        logger.info(`🚀 ${cluster.isMaster ? 'Single-Process' : 'Worker ' + process.pid} started at http://localhost:${PORT}`);
+    });
 };
 
 startServer().catch(err => {

@@ -13,4 +13,8 @@ const pledgeSchema = new mongoose.Schema({
     created_at: { type: Date, default: Date.now }
 });
 
+// Add indexes for faster queries (Sync and Admin views)
+pledgeSchema.index({ status: 1 });
+pledgeSchema.index({ created_at: -1 });
+
 module.exports = mongoose.model('Pledge', pledgeSchema);

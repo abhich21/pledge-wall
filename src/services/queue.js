@@ -31,20 +31,19 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
         const activeFrame = await Frame.findOne({ is_active: true }).lean();
         const framePath = activeFrame ? path.join(__dirname, '../../public', activeFrame.file_path) : null;
 
-        // Photo processing with Jimp
-        logger.debug('📸 Reading photo for Job: %s', jobId);
+        // Photo processing with Jimp - Optimized for wall delivery
         const image = await Jimp.read(photoPath);
-        image.cover(1200, 1200);
+        image.cover(800, 800); // Smaller for grid performance, 1200 was overkill
 
         if (framePath && fs.existsSync(framePath)) {
             logger.debug('🖼️ Applying frame %s to Job: %s', activeFrame.name, jobId);
             const frame = await Jimp.read(framePath);
-            frame.resize(1200, 1200);
-            image.composite(frame, 0, 0);
+            frame.resize(800, 800); // Match image dimensions
+            image.composite(frame, 0, 0); // Overlay frame ON TOP of photo
         }
 
-        await image.quality(85).writeAsync(finalPath);
-        logger.debug('💾 Image processed and saved to disk: %s', photoUrl);
+        await image.quality(75).writeAsync(finalPath); // 75 is the sweet spot for web
+        logger.debug('💾 Image optimized and saved: %s', photoUrl);
 
         // Save to MongoDB
         const newPledge = new Pledge({

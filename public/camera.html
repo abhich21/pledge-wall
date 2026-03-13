@@ -114,15 +114,22 @@
             }
         }
 
+        const rawCanvas = document.createElement('canvas'); // For server upload (raw)
+
         shutter.onclick = () => {
             const ctx = canvas.getContext('2d');
+            const rawCtx = rawCanvas.getContext('2d');
+
             canvas.width = 1000;
             canvas.height = 1200;
+            rawCanvas.width = 1000;
+            rawCanvas.height = 1200;
 
-            // Draw video (mirror if needed, but standard usually fine)
+            // 1. Capture RAW photo for server
+            rawCtx.drawImage(video, 0, 0, 1000, 1200);
+
+            // 2. Capture PREVIEW (with frame) for user UI
             ctx.drawImage(video, 0, 0, 1000, 1200);
-
-            // Draw frame on top
             if (activeFrameImg.complete) {
                 ctx.drawImage(activeFrameImg, 0, 0, 1000, 1200);
             }
@@ -132,7 +139,6 @@
             shutter.classList.add('hidden');
             controls.classList.remove('hidden');
 
-            // Stop camera
             stream.getTracks().forEach(track => track.stop());
         };
 
@@ -147,7 +153,8 @@
         uploadBtn.onclick = async () => {
             loading.classList.remove('hidden');
 
-            canvas.toBlob(async (blob) => {
+            // Send rawCanvas to server (Server will apply technical frame)
+            rawCanvas.toBlob(async (blob) => {
                 const formData = new FormData();
                 formData.append('photo', blob, 'pledge.jpg');
                 formData.append('name', sessionStorage.getItem('pledge_name'));
@@ -171,7 +178,7 @@
                     alert('Upload failed. Please try again.');
                     loading.classList.add('hidden');
                 }
-            }, 'image/jpeg', 0.85);
+            }, 'image/jpeg', 0.9);
         };
 
         async function pollStatus(jobId) {

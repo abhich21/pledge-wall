@@ -11,7 +11,8 @@ const logFormat = winston.format.combine(
 const consoleFormat = winston.format.combine(
     winston.format.colorize(),
     winston.format.printf(({ level, message, timestamp, stack }) => {
-        return `${timestamp} ${level}: ${stack || message}`;
+        const time = new Date(timestamp).toLocaleTimeString('en-GB', { hour12: false });
+        return `${time} ${level}: ${stack || message}`;
     })
 );
 

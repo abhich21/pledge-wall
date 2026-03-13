@@ -45,14 +45,20 @@
         }
 
         .author-name {
-            font-size: 11px;
+            font-size: 13px;
+            font-weight: 700;
             margin-top: 5px;
-            color: #555;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            width: 100%;
+            color: var(--primary-blue);
             text-align: center;
+        }
+
+        .pledge-text {
+            font-size: 10px;
+            line-height: 1.2;
+            color: #666;
+            margin-top: 2px;
+            text-align: center;
+            font-style: italic;
         }
     </style>
 </head>
@@ -95,14 +101,20 @@
         function renderWall() {
             grid.innerHTML = '';
             photos.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            photos.forEach(addPhotoToGrid);
+
+            const fragment = document.createDocumentFragment();
+            photos.forEach(photo => {
+                const el = createPhotoElement(photo);
+                fragment.prepend(el);
+            });
+            grid.appendChild(fragment);
             updateStats();
         }
 
-        function addPhotoToGrid(photo) {
+        function createPhotoElement(photo) {
             const div = document.createElement('div');
             div.className = 'wall-item';
-            div.id = `photo-${photo.id}`;
+            div.id = `photo-${photo.id || photo._id}`;
 
             const rotation = (Math.random() * 10 - 5).toFixed(2);
             div.style.setProperty('--rotation', `${rotation}deg`);
@@ -110,10 +122,16 @@
             div.innerHTML = `
                 <div class="polaroid-card">
                     <img src="${photo.photo_url}" class="polaroid-image" loading="lazy">
-                    <div class="author-name">${photo.name}</div>
+                    <div class="author-name">#BeTheChange ❤️</div>
+                    ${photo.message ? `<div class="pledge-text">"${photo.message}"</div>` : ''}
                 </div>
             `;
-            grid.prepend(div); // Newest first for visual impact
+            return div;
+        }
+
+        function addPhotoToGrid(photo) {
+            const el = createPhotoElement(photo);
+            grid.prepend(el);
         }
 
         function updateStats() {

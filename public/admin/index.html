@@ -31,13 +31,29 @@
             </div>
             <div class="input-group">
                 <label class="input-label">Password</label>
-                <input type="password" id="password" class="input-field" placeholder="••••••••" required>
+                <div style="position: relative;">
+                    <input type="password" id="password" class="input-field" placeholder="••••••••" required
+                        style="padding-right: 45px;">
+                    <button type="button" id="togglePassword"
+                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; padding: 5px; color: #666;">
+                        👁️
+                    </button>
+                </div>
             </div>
             <button type="submit" class="btn-primary" style="margin-top: 10px;">Login</button>
         </form>
     </div>
 
     <script>
+        const toggleBtn = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+
+        toggleBtn.onclick = () => {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            toggleBtn.textContent = isPassword ? '🔒' : '👁️';
+        };
+
         document.getElementById('loginForm').onsubmit = async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;

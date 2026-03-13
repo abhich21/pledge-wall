@@ -3,6 +3,7 @@
  */
 function initSocket(namespace = '/wall') {
     const socket = io(namespace, {
+        transports: ['websocket'], // Match server optimization
         reconnection: true,
         reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,

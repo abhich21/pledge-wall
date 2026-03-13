@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const fs = require('fs');
 const morgan = require('morgan');
+const compression = require('compression');
 const logger = require('./utils/logger');
 
 const { verifyToken, signToken } = require('./middleware/auth');
@@ -34,7 +35,8 @@ const validatePayload = (data, schema) => {
 };
 
 // Middleware
-app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
+app.use(compression());
+app.use(morgan(':method :url :status :response-time ms', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -67,11 +69,20 @@ const upload = multer({
 
 // Static
 const rootDir = path.join(__dirname, '..');
-app.use(express.static(path.join(rootDir, 'public')));
-app.use('/uploads', express.static(path.join(rootDir, 'uploads'), { maxAge: '1h' }));
+app.use(express.static(path.join(rootDir, 'public'), { maxAge: '2h' }));
+app.use('/uploads', express.static(path.join(rootDir, 'uploads'), { maxAge: '24h', immutable: true }));
 
 // Set IO on app for use in routes
 app.set('socketio', null);
+
+// --- FRONTEND ROUTES ---
+app.get('/', (req, res) => res.sendFile(path.join(rootDir, 'public', 'index.html')));
+app.get('/pledge', (req, res) => res.sendFile(path.join(rootDir, 'public', 'pledge.html')));
+app.get('/camera', (req, res) => res.sendFile(path.join(rootDir, 'public', 'camera.html')));
+app.get('/success', (req, res) => res.sendFile(path.join(rootDir, 'public', 'success.html')));
+app.get('/wall', (req, res) => res.sendFile(path.join(rootDir, 'public', 'wall.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(rootDir, 'public', 'admin', 'index.html')));
+app.get('/admin/dashboard', (req, res) => res.sendFile(path.join(rootDir, 'public', 'admin', 'dashboard.html')));
 
 // --- PUBLIC API ---
 
