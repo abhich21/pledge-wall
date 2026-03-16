@@ -29,7 +29,7 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
 
         // Get active frame from MongoDB
         const activeFrame = await Frame.findOne({ is_active: true }).lean();
-        const framePath = activeFrame ? path.join(__dirname, '../../public', activeFrame.file_path) : null;
+        const framePath = activeFrame ? path.join(__dirname, '../../', activeFrame.file_path) : null;
 
         // Read user photo
         const image = await Jimp.read(photoPath);

@@ -146,11 +146,33 @@ app.get('/api/admin/verify', verifyToken, (req, res) => res.json({ valid: true }
 
 app.get('/api/admin/photos', verifyToken, async (req, res) => {
     try {
-        const photos = await Pledge.find().sort({ created_at: -1 }).lean();
-        logger.debug('📷 Fetched %d photos for admin panel', photos.length);
+        const limit = parseInt(req.query.limit) || 50;
+        const offset = parseInt(req.query.offset) || 0;
+
+        const photos = await Pledge.find()
+            .sort({ created_at: -1 })
+            .skip(offset)
+            .limit(limit)
+            .lean();
+
+        logger.debug('📷 Fetched %d photos for admin (offset: %d, limit: %d)', photos.length, offset, limit);
         res.json(photos);
     } catch (err) {
         logger.error('❌ Failed to fetch admin photos: %o', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/admin/stats', verifyToken, async (req, res) => {
+    try {
+        const [total, approved, rejected, archived] = await Promise.all([
+            Pledge.countDocuments(),
+            Pledge.countDocuments({ status: 'approved' }),
+            Pledge.countDocuments({ status: 'rejected' }),
+            Pledge.countDocuments({ status: 'archived' })
+        ]);
+        res.json({ total, approved, rejected, archived });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
@@ -256,14 +278,14 @@ app.post('/api/admin/frame', verifyToken, upload.single('frame'), async (req, re
         for (const f of oldFrames) {
             // Strip leading slash if present to avoid absolute path joining issues
             const relativePath = f.file_path.startsWith('/') ? f.file_path.substring(1) : f.file_path;
-            const oldPath = path.join(__dirname, '..', 'public', relativePath);
+            const oldPath = path.join(rootDir, relativePath);
             if (fs.existsSync(oldPath)) {
                 try { fs.unlinkSync(oldPath); } catch (e) { logger.error('Failed to delete old frame file: %o', e); }
             }
         }
         await Frame.deleteMany({});
 
-        const framesDir = path.join(__dirname, '..', 'public', 'uploads', 'frames');
+        const framesDir = path.join(rootDir, 'uploads', 'frames');
         if (!fs.existsSync(framesDir)) fs.mkdirSync(framesDir, { recursive: true });
 
         const filename = `frame_${Date.now()}.png`;
@@ -279,7 +301,7 @@ app.post('/api/admin/frame', verifyToken, upload.single('frame'), async (req, re
         });
 
         await newFrame.save();
-        logger.info('🖼️ New active frame uploaded: %s', filePath);
+        logger.info('🖼️ New active frame uploaded into root: %s', filePath);
         res.json({ message: 'Frame updated', url: filePath });
     } catch (err) {
         if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
@@ -292,9 +314,8 @@ app.post('/api/admin/frame/reset', verifyToken, async (req, res) => {
     try {
         const oldFrames = await Frame.find();
         for (const f of oldFrames) {
-            // Strip leading slash if present to avoid absolute path joining issues
             const relativePath = f.file_path.startsWith('/') ? f.file_path.substring(1) : f.file_path;
-            const oldPath = path.join(__dirname, '..', 'public', relativePath);
+            const oldPath = path.join(rootDir, relativePath);
             if (fs.existsSync(oldPath)) {
                 try { fs.unlinkSync(oldPath); } catch (e) { logger.error('Failed to delete old frame file: %o', e); }
             }

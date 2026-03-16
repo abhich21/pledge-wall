@@ -10,7 +10,10 @@ const pledgeSchema = new mongoose.Schema({
         default: 'approved',
         enum: ['approved', 'rejected', 'archived']
     },
-    created_at: { type: Date, default: Date.now }
+    created_at: {
+        type: Date,
+        default: () => new Date(Date.now() + 5.5 * 60 * 60 * 1000)
+    }
 });
 
 // Add indexes for faster queries (Sync and Admin views)

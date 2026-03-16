@@ -13,48 +13,64 @@
     <style>
         body {
             background: #fdfdfd;
+            margin: 0;
+            overflow: hidden;
+            /* Lock scroll */
         }
 
         .wall-header h1 {
-            font-size: 48px;
-            margin-bottom: 10px;
+            font-size: 32px;
+            margin: 0;
+            padding: 10px 0;
+            background: rgba(255, 255, 255, 0.8);
+            position: relative;
+            z-index: 1000;
         }
 
         .wall-header .heart-icon {
-            font-size: 40px;
+            font-size: 24px;
             color: var(--primary-red);
         }
 
-        .grid-slot {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        .wall-grid {
+            position: relative;
+            width: 100vw;
+            height: calc(100vh - 120px);
+            overflow: hidden;
+            background: #fafafa;
+        }
+
+        .wall-item {
+            position: absolute;
+            transition: all 0.5s ease;
+            z-index: 1;
         }
 
         .wall-item .polaroid-card {
-            width: 180px;
+            width: var(--card-width, 150px);
             transform: rotate(var(--rotation, 0deg));
-            transition: transform 0.3s;
+            transition: width 0.5s ease, transform 0.3s;
+        }
+
+        .wall-item:hover {
+            z-index: 999 !important;
         }
 
         .wall-item:hover .polaroid-card {
-            transform: scale(1.1) rotate(0deg);
-            z-index: 100;
+            transform: scale(1.2) rotate(0deg);
         }
 
         .author-name {
-            font-size: 13px;
+            font-size: 10px;
             font-weight: 700;
-            margin-top: 5px;
+            margin-top: 3px;
             color: var(--primary-blue);
             text-align: center;
         }
 
         .pledge-text {
-            font-size: 10px;
-            line-height: 1.2;
+            font-size: 8px;
+            line-height: 1.1;
             color: #666;
             margin-top: 2px;
             text-align: center;
@@ -73,7 +89,7 @@
     </div>
 
     <div class="wall-stats">
-        <span id="pledgeCount">0</span> Pledges and Counting ❤️
+        <span id="pledgeCount">0</span> Pledges ❤️
     </div>
 
     <script>
@@ -81,8 +97,25 @@
         const countDisplay = document.getElementById('pledgeCount');
         let photos = [];
         let lastTimestamp = null;
+        let baseZIndex = 1;
 
         const socket = initSocket('/wall');
+
+        function calculateCardSize(count) {
+            // Logic to shrink cards as count increases
+            // 1-20: 200px
+            // 21-100: Scale from 200px down to 100px
+            // 101-500: Scale from 100px down to 50px
+            if (count <= 20) return 200;
+            if (count <= 100) return 200 - ((count - 20) * (100 / 80));
+            if (count <= 500) return 100 - ((count - 100) * (50 / 400));
+            return 50;
+        }
+
+        function updateDynamicLayout() {
+            const cardWidth = calculateCardSize(photos.length);
+            document.documentElement.style.setProperty('--card-width', `${cardWidth}px`);
+        }
 
         async function fetchPhotos() {
             try {
@@ -100,12 +133,14 @@
 
         function renderWall() {
             grid.innerHTML = '';
+            updateDynamicLayout();
+
             photos.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
             const fragment = document.createDocumentFragment();
             photos.forEach(photo => {
                 const el = createPhotoElement(photo);
-                fragment.prepend(el);
+                fragment.appendChild(el);
             });
             grid.appendChild(fragment);
             updateStats();
@@ -114,23 +149,35 @@
         function createPhotoElement(photo) {
             const div = document.createElement('div');
             div.className = 'wall-item';
-            div.id = `photo-${photo.id || photo._id}`;
+            div.id = `photo-${photo._id}`;
 
-            const rotation = (Math.random() * 10 - 5).toFixed(2);
+            const rotation = (Math.random() * 20 - 10).toFixed(2);
+
+            // Randomly scatter, keeping 10% margin to prevent edge cutoffs
+            const left = (Math.random() * 80 + 5).toFixed(2);
+            const top = (Math.random() * 75 + 5).toFixed(2);
+
+            div.style.left = `${left}%`;
+            div.style.top = `${top}%`;
+            div.style.zIndex = baseZIndex++;
             div.style.setProperty('--rotation', `${rotation}deg`);
 
             div.innerHTML = `
                 <div class="polaroid-card">
                     <img src="${photo.photo_url}" class="polaroid-image" loading="lazy">
-                    ${photo.message ? `<div class="pledge-text" style="display:block; padding: 5px 0 10px 0; text-align:center;">"${photo.message}"</div>` : ''}
+                    <div style="padding: 5px; background: white;">
+                        <div class="author-name">${photo.name}</div>
+                        ${photo.message ? `<div class="pledge-text">"${photo.message}"</div>` : ''}
+                    </div>
                 </div>
             `;
             return div;
         }
 
         function addPhotoToGrid(photo) {
+            updateDynamicLayout();
             const el = createPhotoElement(photo);
-            grid.prepend(el);
+            grid.appendChild(el);
         }
 
         function updateStats() {

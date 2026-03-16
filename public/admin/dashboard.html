@@ -115,7 +115,7 @@
 
         .frame-preview {
             width: 100%;
-            aspect-ratio: 3/4;
+            /* aspect-ratio: 3/4; */
             background: #f0f0f0;
             border-radius: 8px;
             margin: 15px 0;
@@ -128,6 +128,17 @@
         .frame-preview img {
             max-width: 100%;
             max-height: 100%;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 700;
+            background: #eee;
+            color: #333;
         }
     </style>
 </head>
@@ -172,6 +183,10 @@
                 <div id="submissions">
                     <!-- Loaded dynamically -->
                 </div>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button id="loadMoreBtn" onclick="loadMore()" class="btn-secondary"
+                        style="display:none; padding: 10px 30px; width: auto; margin: 0 auto;">Load More</button>
+                </div>
             </div>
 
             <div class="frame-mgmt">
@@ -185,8 +200,8 @@
                         <input type="file" id="frameFile" class="input-field" accept="image/png">
                     </div>
                     <button type="submit" class="btn-primary">Upload New Frame</button>
-                    <button type="button" onclick="resetFrame()" class="btn-secondary"
-                        style="width:100%; margin-top:10px; color:#333; background:#eee;">Reset to Default</button>
+                    <!-- <button type="button" onclick="resetFrame()" class="btn-secondary"
+                        style="width:100%; margin-top:10px; color:#333; background:#eee;">Reset to Default</button> -->
                 </form>
             </div>
         </div>
@@ -201,24 +216,27 @@
         // Initialize Socket for real-time updates
         const socket = initSocket('/admin');
 
-        socket.on('new_photo', () => {
+        socket.on('new_photo', (photo) => {
             console.log('⚡ New photo received via socket');
-            loadData();
+            updateStats();
+            prependPhoto(photo);
         });
 
-        socket.on('photo_updated', () => {
+        socket.on('photo_updated', (photo) => {
             console.log('⚡ Photo updated via socket');
-            loadData();
+            updateStats();
+            updatePhotoRow(photo);
         });
 
-        socket.on('photo_deleted', () => {
+        socket.on('photo_deleted', (payload) => {
             console.log('⚡ Photo deleted via socket');
-            loadData();
+            updateStats();
+            removePhotoRow(payload.id);
         });
 
         socket.on('wall_cleared', () => {
             console.log('⚡ Wall cleared via socket');
-            loadData();
+            window.location.reload(); // Hard reset for clear all
         });
 
         async function apiFetch(url, options = {}) {
@@ -231,59 +249,130 @@
             return res.json();
         }
 
-        async function loadData() {
-            const photos = await apiFetch('/api/admin/photos');
-            renderPhotos(photos);
-            updateStats(photos);
+        let currentOffset = 0;
+        const LIMIT = 50;
+
+        async function loadData(reset = true) {
+            if (reset) {
+                currentOffset = 0;
+                document.getElementById('submissions').innerHTML = '';
+            }
+
+            updateStats();
+
+            const photos = await apiFetch(`/api/admin/photos?limit=${LIMIT}&offset=${currentOffset}`);
+            renderPhotos(photos, !reset);
+
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            if (photos.length === LIMIT) {
+                loadMoreBtn.style.display = 'inline-block';
+            } else {
+                loadMoreBtn.style.display = 'none';
+            }
 
             const frameRes = await fetch('/api/frame/active');
             const frame = await frameRes.json();
             document.getElementById('activeFrameImg').src = frame.url;
         }
 
-        function renderPhotos(photos) {
-            const container = document.getElementById('submissions');
-            container.innerHTML = photos.length ? '' : '<p class="text-center">No submissions yet.</p>';
-
-            photos.forEach(p => {
-                const div = document.createElement('div');
-                div.className = 'photo-row';
-                div.innerHTML = `
-                    <img src="${p.photo_url}" class="photo-thumb">
-                    <div class="photo-info">
-                        <strong>${p.name}</strong><br>
-                        <small>${p.organisation || 'No Org'} | Status: ${p.status}</small><br>
-                        <em style="font-size:12px;">"${p.message || ''}"</em>
-                    </div>
-                    <div class="photo-actions">
-                        ${p.status !== 'approved' ? `<button onclick="updateStatus('${p._id}', 'approved')" class="btn-sm btn-approve">Approve</button>` : ''}
-                        ${p.status !== 'rejected' ? `<button onclick="updateStatus('${p._id}', 'rejected')" class="btn-sm btn-reject">Reject</button>` : ''}
-                        <button onclick="deletePhoto('${p._id}')" class="btn-sm btn-delete">Delete</button>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
+        async function loadMore() {
+            currentOffset += LIMIT;
+            loadData(false);
         }
 
-        function updateStats(photos) {
-            document.getElementById('statTotal').textContent = photos.length;
-            document.getElementById('statApproved').textContent = photos.filter(p => p.status === 'approved').length;
-            document.getElementById('statRejected').textContent = photos.filter(p => p.status === 'rejected').length;
+        async function updateStats() {
+            try {
+                const stats = await apiFetch('/api/admin/stats');
+                document.getElementById('statTotal').textContent = stats.total;
+                document.getElementById('statApproved').textContent = stats.approved;
+                document.getElementById('statRejected').textContent = stats.rejected;
+            } catch (err) {
+                console.error('Failed to update stats', err);
+            }
+        }
+
+        function createPhotoRow(p) {
+            const div = document.createElement('div');
+            div.className = 'photo-row';
+            div.id = `admin-photo-${p._id}`;
+            div.innerHTML = `
+                <img src="${p.photo_url}" class="photo-thumb">
+                <div class="photo-info">
+                    <strong>${p.name}</strong><br>
+                    <small>${p.organisation || 'No Org'} | Status: <span class="status-badge">${p.status}</span></small><br>
+                    <em style="font-size:12px;">"${p.message || ''}"</em>
+                </div>
+                <div class="photo-actions">
+                    <button onclick="updateStatus('${p._id}', 'approved')" class="btn-sm btn-approve" ${p.status === 'approved' ? 'style="display:none"' : ''}>Approve</button>
+                    <button onclick="updateStatus('${p._id}', 'rejected')" class="btn-sm btn-reject" ${p.status === 'rejected' ? 'style="display:none"' : ''}>Reject</button>
+                    <button onclick="deletePhoto('${p._id}')" class="btn-sm btn-delete">Delete</button>
+                </div>
+            `;
+            return div;
+        }
+
+        function renderPhotos(photos, append = false) {
+            const container = document.getElementById('submissions');
+            if (!photos.length && !append) {
+                container.innerHTML = '<p class="text-center">No submissions yet.</p>';
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            photos.forEach(p => {
+                fragment.appendChild(createPhotoRow(p));
+            });
+            container.appendChild(fragment);
+        }
+
+        function prependPhoto(p) {
+            const container = document.getElementById('submissions');
+            // Remove empty message if exists
+            if (container.querySelector('p.text-center')) container.innerHTML = '';
+
+            const existing = document.getElementById(`admin-photo-${p._id}`);
+            if (existing) return; // Prevent duplicates
+
+            const row = createPhotoRow(p);
+            row.style.background = '#fff9c4'; // Highlight new photo
+            container.prepend(row);
+            setTimeout(() => row.style.background = '', 3000);
+        }
+
+        function updatePhotoRow(p) {
+            const row = document.getElementById(`admin-photo-${p._id}`);
+            if (!row) return;
+
+            row.querySelector('.status-badge').textContent = p.status;
+            const approveBtn = row.querySelector('.btn-approve');
+            const rejectBtn = row.querySelector('.btn-reject');
+
+            approveBtn.style.display = p.status === 'approved' ? 'none' : 'inline-block';
+            rejectBtn.style.display = p.status === 'rejected' ? 'none' : 'inline-block';
+        }
+
+        function removePhotoRow(id) {
+            const row = document.getElementById(`admin-photo-${id}`);
+            if (row) {
+                row.style.opacity = '0.5';
+                row.style.transform = 'translateX(20px)';
+                setTimeout(() => row.remove(), 300);
+            }
         }
 
         async function updateStatus(id, status) {
-            await apiFetch(`/api/admin/photos/${id}/status`, {
+            const res = await apiFetch(`/api/admin/photos/${id}/status`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
             });
-            loadData();
+            // Socket will handle the specific row update
         }
 
         async function deletePhoto(id) {
             if (!confirm('Are you sure you want to delete this photo?')) return;
             await apiFetch(`/api/admin/photos/${id}`, { method: 'DELETE' });
-            loadData();
+            // Socket will handle the removal
         }
 
         async function bulkAction(type) {
@@ -298,14 +387,33 @@
             const file = document.getElementById('frameFile').files[0];
             if (!file) return;
 
-            const fd = new FormData();
-            fd.append('frame', file);
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.textContent;
+            btn.textContent = 'Uploading...';
+            btn.disabled = true;
 
-            await apiFetch('/api/admin/frame', {
-                method: 'POST',
-                body: fd
-            });
-            loadData();
+            try {
+                const fd = new FormData();
+                fd.append('frame', file);
+
+                const res = await apiFetch('/api/admin/frame', {
+                    method: 'POST',
+                    body: fd
+                });
+
+                if (res.error) throw new Error(res.error);
+
+                alert('✅ Frame updated successfully!');
+                await loadData();
+                // Cache bust the preview image
+                document.getElementById('activeFrameImg').src = res.url + '?t=' + Date.now();
+                e.target.reset();
+            } catch (err) {
+                alert('❌ Error: ' + err.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
         };
 
         async function resetFrame() {
