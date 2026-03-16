@@ -192,9 +192,34 @@
         </div>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/socket-client.js"></script>
     <script>
         const token = localStorage.getItem('admin_token');
         if (!token) window.location.href = 'index.html';
+
+        // Initialize Socket for real-time updates
+        const socket = initSocket('/admin');
+
+        socket.on('new_photo', () => {
+            console.log('⚡ New photo received via socket');
+            loadData();
+        });
+
+        socket.on('photo_updated', () => {
+            console.log('⚡ Photo updated via socket');
+            loadData();
+        });
+
+        socket.on('photo_deleted', () => {
+            console.log('⚡ Photo deleted via socket');
+            loadData();
+        });
+
+        socket.on('wall_cleared', () => {
+            console.log('⚡ Wall cleared via socket');
+            loadData();
+        });
 
         async function apiFetch(url, options = {}) {
             options.headers = {
@@ -231,9 +256,9 @@
                         <em style="font-size:12px;">"${p.message || ''}"</em>
                     </div>
                     <div class="photo-actions">
-                        ${p.status !== 'approved' ? `<button onclick="updateStatus(${p.id}, 'approved')" class="btn-sm btn-approve">Approve</button>` : ''}
-                        ${p.status !== 'rejected' ? `<button onclick="updateStatus(${p.id}, 'rejected')" class="btn-sm btn-reject">Reject</button>` : ''}
-                        <button onclick="deletePhoto(${p.id})" class="btn-sm btn-delete">Delete</button>
+                        ${p.status !== 'approved' ? `<button onclick="updateStatus('${p._id}', 'approved')" class="btn-sm btn-approve">Approve</button>` : ''}
+                        ${p.status !== 'rejected' ? `<button onclick="updateStatus('${p._id}', 'rejected')" class="btn-sm btn-reject">Reject</button>` : ''}
+                        <button onclick="deletePhoto('${p._id}')" class="btn-sm btn-delete">Delete</button>
                     </div>
                 `;
                 container.appendChild(div);

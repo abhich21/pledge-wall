@@ -3,7 +3,7 @@ const http = require('http');
 const cluster = require('cluster');
 const numCPUs = require('os').cpus().length;
 const { Server } = require('socket.io');
-const { setupWorker } = require('@socket.io/cluster-adapter');
+const { createAdapter, setupPrimary } = require('@socket.io/cluster-adapter');
 const app = require('./src/app');
 const connectDB = require('./src/models/db');
 const cache = require('./src/services/cache');
@@ -25,11 +25,12 @@ const logRoutes = (port) => {
 const startServer = async () => {
     const PORT = process.env.PORT || 3000;
 
-    // If single core, run directly without cluster overhead
+    // Connect DB and Init Cache for the current process (Master or Single)
+    await connectDB();
+    await cache.initCache();
+
     if (numCPUs <= 1) {
         logger.info('⚙️ Single core detected. Running in single-process mode.');
-        await connectDB();
-        await cache.initCache();
         logRoutes(PORT);
         runWorker();
         return;
@@ -37,9 +38,10 @@ const startServer = async () => {
 
     if (cluster.isMaster) {
         logger.info(`🏰 Master Process ${process.pid} is running (Detected ${numCPUs} cores)`);
-        await connectDB();
-        await cache.initCache();
         logRoutes(PORT);
+
+        // Required for Socket.io cluster adapter
+        setupPrimary();
 
         // Fork workers
         for (let i = 0; i < numCPUs; i++) {
@@ -51,7 +53,7 @@ const startServer = async () => {
             cluster.fork();
         });
     } else {
-        await connectDB();
+        // Redundant call for clarity in clustered workers
         runWorker();
     }
 };
@@ -70,18 +72,20 @@ const runWorker = () => {
         }
     });
 
+    // Setup cluster adapter to sync across workers
+    io.adapter(createAdapter());
+
+    // Provide the io instance to Express app
     app.set('socketio', io);
 
     io.of('/wall').on('connection', (socket) => {
         logger.debug(`📡 Socket connected to /wall: ${socket.id}`);
         socket.join('wall');
-        socket.on('disconnect', () => logger.debug(`❌ Socket disconnected from /wall: ${socket.id}`));
     });
 
     io.of('/admin').on('connection', (socket) => {
         logger.debug(`🔐 Admin Socket connected: ${socket.id}`);
         socket.join('admin');
-        socket.on('disconnect', () => logger.debug(`❌ Admin Socket disconnected: ${socket.id}`));
     });
 
     const PORT = process.env.PORT || 3000;

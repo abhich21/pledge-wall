@@ -9,18 +9,34 @@
         rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .camera-box {
+        .back-link {
+            text-decoration: none;
+            color: var(--primary-blue);
+            font-size: 20px;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+
+        .page-title {
+            font-size: 18px;
+            color: var(--primary-blue);
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* === LIVE CAMERA VIEW === */
+        .camera-live {
             position: relative;
             width: 100%;
             aspect-ratio: 3/4;
-            background: #000;
+            background: #111;
             border-radius: 12px;
             overflow: hidden;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
-        #video,
-        #canvas {
+        #video {
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -28,51 +44,147 @@
 
         .shutter-btn {
             position: absolute;
-            bottom: 20px;
+            bottom: 16px;
             left: 50%;
             transform: translateX(-50%);
-            width: 64px;
-            height: 64px;
+            width: 56px;
+            height: 56px;
             background: white;
             border-radius: 50%;
-            border: 4px solid rgba(0, 0, 0, 0.2);
+            border: 4px solid rgba(255, 255, 255, 0.4);
             cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
-        .preview-controls {
+        /* === PREVIEW VIEW (after capture) === */
+        .preview-section {
             display: flex;
-            gap: 12px;
-            margin-top: -12px;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Polaroid card with dynamic frame overlay */
+        .polaroid-preview {
+            background: #fff;
+            padding: 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+            border-radius: 4px;
+            display: inline-block;
             position: relative;
+            max-width: 300px;
+            width: 80%;
+            overflow: hidden;
+            aspect-ratio: 3/4;
+        }
+
+        .polaroid-preview .photo-frame {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .polaroid-preview .photo-frame .user-photo {
+            position: absolute;
+            top: 7%;
+            left: 10%;
+            width: 80%;
+            height: 68%;
+            object-fit: cover;
+            display: block;
+            z-index: 1;
+        }
+
+        .polaroid-preview .frame-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .preview-message {
+            width: 100%;
+            padding: 5px 10px 10px 10px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            min-height: 20px;
+            word-wrap: break-word;
+        }
+
+        .retake-btn-wrap {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 10;
+        }
+
+        .btn-retake {
+            background: rgba(0, 48, 135, 0.8);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(4px);
+        }
+
+        .upload-section {
+            width: 100%;
+            margin-top: 20px;
         }
     </style>
 </head>
 
 <body>
-    <header>
-        <a href="pledge.html" class="back-btn">&larr;</a>
-    </header>
-
     <div class="container">
-        <h2 class="text-center text-blue" style="margin-bottom: 24px;">Snap a picture of yourself</h2>
+        <a href="pledge.html" class="back-link">&lt;</a>
+        <h2 class="page-title">Snap a picture of yourself</h2>
 
-        <div class="camera-box">
+        <!-- LIVE CAMERA (shown initially) -->
+        <div id="cameraView" class="camera-live">
             <video id="video" autoplay playsinline></video>
-            <canvas id="canvas" class="hidden"></canvas>
             <button id="shutter" class="shutter-btn"></button>
         </div>
 
-        <div id="controls" class="hidden">
-            <div class="preview-controls">
-                <button id="retake" class="btn-secondary" style="flex: 1;">Retake</button>
+        <!-- PREVIEW (shown after capture) -->
+        <div id="previewView" class="preview-section hidden">
+            <div id="polaroidContainer" class="polaroid-preview">
+                <div class="photo-frame">
+                    <img id="capturedPhoto" src="" alt="Your Photo" class="user-photo">
+                    <img id="frameOverlay" src="/assets/default-frame.png" alt="Frame" class="frame-overlay">
+                </div>
+                <!-- Dynamic user message will appear here -->
+                <div id="previewMessage" class="preview-message"></div>
+                <div class="retake-btn-wrap">
+                    <button id="retake" class="btn-retake">Retake <span style="font-size:16px;">↻</span></button>
+                </div>
             </div>
-            <button id="upload" class="btn-primary" style="margin-top: 20px;">Upload Pledge</button>
+            <div class="upload-section">
+                <button id="upload" class="btn-primary">Upload</button>
+            </div>
         </div>
+    </div>
 
-        <p class="text-center" style="font-size: 14px; color: #666; margin-top: 10px;">
-            Your photo will be framed and added to the wall!
-        </p>
+    <!-- Footer Waves -->
+    <div class="footer-waves">
+        <svg class="wave-svg" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#013188" d="M0,160 C320,300 1120,40 1440,240 L1440,320 L0,320 Z"></path>
+            <path fill="#D0021B" d="M0,220 C480,350 1200,100 1440,280 L1440,320 L0,320 Z" style="opacity:0.9;"></path>
+        </svg>
     </div>
 
     <div id="loading" class="loading-overlay hidden">
@@ -80,80 +192,91 @@
     </div>
 
     <script>
+        // Must have filled the pledge form first
+        if (!sessionStorage.getItem('pledge_name')) {
+            window.location.href = 'pledge.html';
+        }
+
         const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
+        const capturedPhoto = document.getElementById('capturedPhoto');
         const shutter = document.getElementById('shutter');
-        const retake = document.getElementById('retake');
+        const retakeBtn = document.getElementById('retake');
         const uploadBtn = document.getElementById('upload');
-        const controls = document.getElementById('controls');
+        const cameraView = document.getElementById('cameraView');
+        const previewView = document.getElementById('previewView');
         const loading = document.getElementById('loading');
 
         let stream;
-        let activeFrameImg = new Image();
+        let activeFrameUrl = '/assets/default-frame.png';
 
-        // Load active frame first
-        fetch('/api/frame/active')
-            .then(res => res.json())
-            .then(data => {
-                activeFrameImg.src = data.url;
-            })
-            .catch(err => {
-                console.error('Failed to load frame', err);
-                activeFrameImg.src = '/assets/default-frame.png';
-            });
+        // Hidden canvas to capture raw photo for upload
+        const rawCanvas = document.createElement('canvas');
+
+        async function fetchActiveFrame() {
+            try {
+                const res = await fetch('/api/frame/active');
+                const data = await res.json();
+                activeFrameUrl = data.url || '/assets/default-frame.png';
+                document.getElementById('frameOverlay').src = activeFrameUrl;
+            } catch (err) {
+                console.error('Failed to fetch active frame:', err);
+                document.getElementById('frameOverlay').src = activeFrameUrl;
+            }
+        }
 
         async function startCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user', width: { ideal: 1080 }, height: { ideal: 1440 } }
+                    video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } }
                 });
                 video.srcObject = stream;
             } catch (err) {
-                alert('Please allow camera access to take a photo.');
-                console.error(err);
+                alert('Please allow camera access.');
             }
         }
 
-        const rawCanvas = document.createElement('canvas'); // For server upload (raw)
-
+        // SHUTTER: Capture photo, show framed preview
         shutter.onclick = () => {
-            const ctx = canvas.getContext('2d');
-            const rawCtx = rawCanvas.getContext('2d');
+            // Capture raw photo to hidden canvas
+            const vw = video.videoWidth || 720;
+            const vh = video.videoHeight || 960;
+            rawCanvas.width = vw;
+            rawCanvas.height = vh;
+            rawCanvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
 
-            canvas.width = 1000;
-            canvas.height = 1200;
-            rawCanvas.width = 1000;
-            rawCanvas.height = 1200;
-
-            // 1. Capture RAW photo for server
-            rawCtx.drawImage(video, 0, 0, 1000, 1200);
-
-            // 2. Capture PREVIEW (with frame) for user UI
-            ctx.drawImage(video, 0, 0, 1000, 1200);
-            if (activeFrameImg.complete) {
-                ctx.drawImage(activeFrameImg, 0, 0, 1000, 1200);
+            // Stop camera
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
             }
 
-            video.classList.add('hidden');
-            canvas.classList.remove('hidden');
-            shutter.classList.add('hidden');
-            controls.classList.remove('hidden');
+            // Show captured photo inside the HTML polaroid card
+            capturedPhoto.src = rawCanvas.toDataURL('image/jpeg', 0.9);
 
-            stream.getTracks().forEach(track => track.stop());
+            // Set user message preview
+            const msg = sessionStorage.getItem('pledge_msg');
+            const msgEl = document.getElementById('previewMessage');
+            if (msg) {
+                msgEl.textContent = `"${msg}"`;
+                msgEl.style.display = 'block';
+            } else {
+                msgEl.style.display = 'none';
+            }
+
+            // Switch views
+            cameraView.classList.add('hidden');
+            previewView.classList.remove('hidden');
         };
 
-        retake.onclick = () => {
-            video.classList.remove('hidden');
-            canvas.classList.add('hidden');
-            shutter.classList.remove('hidden');
-            controls.classList.add('hidden');
+        // RETAKE: Go back to camera
+        retakeBtn.onclick = () => {
+            previewView.classList.add('hidden');
+            cameraView.classList.remove('hidden');
             startCamera();
         };
 
+        // UPLOAD: Send raw photo to server (server applies frame)
         uploadBtn.onclick = async () => {
             loading.classList.remove('hidden');
-
-            // Send rawCanvas to server (Server will apply technical frame)
             rawCanvas.toBlob(async (blob) => {
                 const formData = new FormData();
                 formData.append('photo', blob, 'pledge.jpg');
@@ -162,42 +285,37 @@
                 formData.append('message', sessionStorage.getItem('pledge_msg') || '');
 
                 try {
-                    const res = await fetch('/api/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
+                    const res = await fetch('/api/upload', { method: 'POST', body: formData });
                     const data = await res.json();
-
-                    if (data.jobId) {
-                        pollStatus(data.jobId);
-                    } else {
-                        alert(data.error || 'Upload failed');
-                        loading.classList.add('hidden');
-                    }
-                } catch (err) {
-                    alert('Upload failed. Please try again.');
-                    loading.classList.add('hidden');
-                }
+                    if (data.jobId) pollStatus(data.jobId);
+                    else { alert(data.error || 'Upload failed'); loading.classList.add('hidden'); }
+                } catch (err) { alert('Upload failed. Try again.'); loading.classList.add('hidden'); }
             }, 'image/jpeg', 0.9);
         };
 
         async function pollStatus(jobId) {
             const interval = setInterval(async () => {
-                const res = await fetch(`/api/upload/status/${jobId}`);
-                const data = await res.json();
-
-                if (data.status === 'done') {
+                try {
+                    const res = await fetch(`/api/upload/status/${jobId}`);
+                    const data = await res.json();
+                    if (data.status === 'done') {
+                        clearInterval(interval);
+                        sessionStorage.setItem('last_photo', data.photo.photo_url);
+                        window.location.href = 'success.html';
+                    } else if (data.status === 'error') {
+                        clearInterval(interval);
+                        alert('Processing error: ' + data.error);
+                        loading.classList.add('hidden');
+                    }
+                } catch (e) {
                     clearInterval(interval);
-                    sessionStorage.setItem('last_photo', data.photo.photo_url);
-                    window.location.href = 'success.html';
-                } else if (data.status === 'error') {
-                    clearInterval(interval);
-                    alert('Failed to process photo: ' + data.error);
+                    alert('Connection error');
                     loading.classList.add('hidden');
                 }
             }, 2000);
         }
 
+        fetchActiveFrame();
         startCamera();
     </script>
 </body>

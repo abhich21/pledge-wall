@@ -1,56 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BeTheChange | Happy Women's Day</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .landing-hero {
-            padding-top: 60px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        .hero-section {
+            padding-top: 40px;
+            text-align: left;
         }
-        .landing-title {
+
+        .title-group {
+            margin-bottom: 20px;
+        }
+
+        .main-title {
             font-size: 32px;
-            line-height: 1.2;
-            margin-bottom: 24px;
+            color: var(--primary-red);
+            line-height: 1.1;
+            margin-bottom: 5px;
         }
-        .landing-body {
-            font-weight: 500;
-            color: #444;
-            margin-bottom: 40px;
+
+        .sub-title {
+            font-size: 24px;
+            color: var(--primary-blue);
+            font-weight: 800;
         }
-        .heart-illustration {
-            width: 250px;
-            margin: 40px 0;
+
+        .copy-text {
+            font-size: 14px;
+            color: var(--primary-blue);
+            line-height: 1.4;
+            margin-bottom: 30px;
+            max-width: 280px;
+        }
+
+        .graphic-container {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .hero-graphic {
+            width: 100%;
+            max-width: 320px;
+            display: block;
         }
     </style>
 </head>
+
 <body>
-    <div class="container text-center">
-        <div class="landing-hero">
-            <h1 class="landing-title text-red">
-                Happy<br>Women's Day<br>
-                <span class="text-italic">#BeTheChange</span>
-            </h1>
-            
-            <p class="landing-body">
-                Together, we pledge to respect, support, and empower every woman ensuring equity, dignity and opportunity for all.
+    <div class="container">
+        <div class="hero-section">
+            <div class="title-group">
+                <h1 class="main-title">Happy</h1>
+                <h1 class="main-title">Women's Day</h1>
+                <div class="sub-title">#BeTheChange</div>
+            </div>
+
+            <p class="copy-text">
+                Together, we pledge to respect, support, and empower every woman ensuring equity, dignity and
+                opportunity for all.
             </p>
 
-            <img src="https://img.icons8.com/isometric/200/FA5252/like.png" alt="Heart Icon" class="heart-illustration">
+            <a href="pledge.html" class="btn-primary" style="max-width: 200px;">Pledge Now</a>
 
-            <a href="pledge.html" class="btn-primary">Pledge Now</a>
+            <div class="graphic-container">
+                <img src="/assets/womens_day_heart_graphic.png" alt="Happy Women's Day" class="hero-graphic">
+            </div>
         </div>
     </div>
 
-    <!-- Wave UI (Inline SVG for speed) -->
-    <svg class="wave-footer" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#003087" d="M0,256L48,229.3C96,203,192,149,288,154.7C384,160,480,224,576,218.7C672,213,768,139,864,128C960,117,1056,171,1152,197.3C1248,224,1344,224,1392,224L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path>
-        <path fill="#D0021B" d="M0,288L48,266.7C96,245,192,203,288,202.7C384,203,480,245,576,261.3C672,277,768,267,864,245.3C960,224,1056,192,1152,186.7C1248,181,1344,203,1392,213.3L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z" style="opacity:0.8;"></path>
-    </svg>
+    <!-- Curvilinear Footer Waves -->
+    <div class="footer-waves">
+        <svg class="wave-svg" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#013188" d="M0,160 C320,300 1120,40 1440,240 L1440,320 L0,320 Z"></path>
+            <path fill="#D0021B" d="M0,220 C480,350 1200,100 1440,280 L1440,320 L0,320 Z" style="opacity:0.9;"></path>
+        </svg>
+    </div>
 </body>
+
 </html>

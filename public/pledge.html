@@ -8,15 +8,30 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .page-title {
+            font-size: 24px;
+            color: var(--primary-blue);
+            font-weight: 700;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .back-link {
+            text-decoration: none;
+            color: var(--primary-blue);
+            font-size: 20px;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+    </style>
 </head>
 
 <body>
-    <header>
-        <a href="index.html" class="back-btn">&larr;</a>
-    </header>
-
     <div class="container">
-        <h2 class="text-center text-blue" style="margin-bottom: 30px;">Enter your details</h2>
+        <a href="index.html" class="back-link">&lt;</a>
+
+        <h2 class="page-title">Enter your details</h2>
 
         <form id="pledgeForm">
             <div class="input-group">
@@ -25,61 +40,34 @@
             </div>
 
             <div class="input-group">
-                <label class="input-label">Organisation (optional)</label>
+                <label class="input-label">Organisation</label>
                 <input type="text" id="userOrg" class="input-field" placeholder="Enter full organisation name">
             </div>
 
-            <div class="input-group">
-                <label class="input-label">Message (optional, max 20 words)</label>
-                <textarea id="userMsg" class="input-field" placeholder="Share a short message (optional)"></textarea>
-                <div class="word-counter"><span id="wordCount">0</span> / 20 words</div>
-            </div>
-
-            <button type="submit" class="btn-primary" style="margin-top: 20px;">Take Photo</button>
+            <button type="submit" class="btn-primary" style="margin-top: 10px;">Take Photo</button>
         </form>
     </div>
 
-    <!-- Wave UI -->
-    <svg class="wave-footer" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#003087"
-            d="M0,256L48,229.3C96,203,192,149,288,154.7C384,160,480,224,576,218.7C672,213,768,139,864,128C960,117,1056,171,1152,197.3C1248,224,1344,224,1392,224L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
-        </path>
-        <path fill="#D0021B"
-            d="M0,288L48,266.7C96,245,192,203,288,202.7C384,203,480,245,576,261.3C672,277,768,267,864,245.3C960,224,1056,192,1152,186.7C1248,181,1344,203,1392,213.3L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"
-            style="opacity:0.8;"></path>
-    </svg>
+    <!-- Curvilinear Footer Waves -->
+    <div class="footer-waves">
+        <svg class="wave-svg" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#013188" d="M0,160 C320,300 1120,40 1440,240 L1440,320 L0,320 Z"></path>
+            <path fill="#D0021B" d="M0,220 C480,350 1200,100 1440,280 L1440,320 L0,320 Z" style="opacity:0.9;"></path>
+        </svg>
+    </div>
 
     <script>
-        const msgInput = document.getElementById('userMsg');
-        const wordCountDisplay = document.getElementById('wordCount');
         const form = document.getElementById('pledgeForm');
-
-        msgInput.addEventListener('input', () => {
-            const words = msgInput.value.trim().split(/\s+/).filter(w => w.length > 0);
-            wordCountDisplay.textContent = words.length;
-
-            if (words.length > 20) {
-                wordCountDisplay.style.color = 'var(--primary-red)';
-            } else {
-                wordCountDisplay.style.color = '#666';
-            }
-        });
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             const name = document.getElementById('userName').value.trim();
             const org = document.getElementById('userOrg').value.trim();
-            const msg = msgInput.value.trim();
-
-            const words = msg.split(/\s+/).filter(w => w.length > 0);
-            if (words.length > 20) {
-                alert('Message exceeds 20 words limit.');
-                return;
-            }
 
             sessionStorage.setItem('pledge_name', name);
             sessionStorage.setItem('pledge_org', org);
-            sessionStorage.setItem('pledge_msg', msg);
+            // Default message placeholder for now since it's not in the mockup but in DB
+            sessionStorage.setItem('pledge_msg', "");
 
             window.location.href = 'camera.html';
         });

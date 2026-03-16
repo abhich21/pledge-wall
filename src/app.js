@@ -172,14 +172,53 @@ app.patch('/api/admin/photos/:id/status', verifyToken, async (req, res) => {
         const io = app.get('socketio');
         if (status === 'approved') {
             cache.addPhoto(photo);
-            if (io) io.of('/wall').emit('new_photo', photo);
+            if (io) {
+                io.of('/wall').emit('new_photo', photo);
+                io.of('/admin').emit('photo_updated', photo);
+            }
         } else {
             cache.removePhoto(id);
-            if (io) io.of('/wall').emit('photo_deleted', { id });
+            if (io) {
+                io.of('/wall').emit('photo_deleted', { id });
+                io.of('/admin').emit('photo_updated', photo);
+            }
         }
         res.json({ message: 'Updated' });
     } catch (err) {
         logger.error('❌ Failed to update photo status: %o', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/admin/photos/archive-all', verifyToken, async (req, res) => {
+    try {
+        await Pledge.updateMany({ status: 'approved' }, { status: 'archived' });
+        cache.clearCache(); // Archive all effectively clears what's on the wall
+        const io = app.get('socketio');
+        if (io) io.of('/wall').emit('wall_cleared');
+        logger.info('📦 All approved photos archived');
+        res.json({ message: 'All photos archived' });
+    } catch (err) {
+        logger.error('❌ Failed to archive photos: %o', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/admin/photos/delete-all', verifyToken, async (req, res) => {
+    try {
+        const photos = await Pledge.find().lean();
+        for (const photo of photos) {
+            const fullPath = path.join(__dirname, '..', photo.photo_url);
+            if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+        }
+        await Pledge.deleteMany({});
+        cache.clearCache();
+        const io = app.get('socketio');
+        if (io) io.of('/wall').emit('wall_cleared');
+        logger.info('🗑️ All photos deleted from DB and Disk');
+        res.json({ message: 'All photos deleted' });
+    } catch (err) {
+        logger.error('❌ Failed to delete all photos: %o', err);
         res.status(500).json({ error: err.message });
     }
 });
@@ -195,10 +234,76 @@ app.delete('/api/admin/photos/:id', verifyToken, async (req, res) => {
         }
         cache.removePhoto(id);
         const io = app.get('socketio');
-        if (io) io.of('/wall').emit('photo_deleted', { id });
+        if (io) {
+            io.of('/wall').emit('photo_deleted', { id });
+            io.of('/admin').emit('photo_deleted', { id });
+        }
         res.json({ message: 'Deleted' });
     } catch (err) {
         logger.error('❌ Failed to delete photo: %o', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- ADMIN FRAME ROUTES ---
+
+app.post('/api/admin/frame', verifyToken, upload.single('frame'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'Frame file required' });
+
+        // Enforce single active frame: Delete old frames
+        const oldFrames = await Frame.find();
+        for (const f of oldFrames) {
+            // Strip leading slash if present to avoid absolute path joining issues
+            const relativePath = f.file_path.startsWith('/') ? f.file_path.substring(1) : f.file_path;
+            const oldPath = path.join(__dirname, '..', 'public', relativePath);
+            if (fs.existsSync(oldPath)) {
+                try { fs.unlinkSync(oldPath); } catch (e) { logger.error('Failed to delete old frame file: %o', e); }
+            }
+        }
+        await Frame.deleteMany({});
+
+        const framesDir = path.join(__dirname, '..', 'public', 'uploads', 'frames');
+        if (!fs.existsSync(framesDir)) fs.mkdirSync(framesDir, { recursive: true });
+
+        const filename = `frame_${Date.now()}.png`;
+        const finalPath = path.join(framesDir, filename);
+        const filePath = `/uploads/frames/${filename}`;
+
+        fs.renameSync(req.file.path, finalPath);
+
+        const newFrame = new Frame({
+            name: req.file.originalname,
+            file_path: filePath,
+            is_active: true
+        });
+
+        await newFrame.save();
+        logger.info('🖼️ New active frame uploaded: %s', filePath);
+        res.json({ message: 'Frame updated', url: filePath });
+    } catch (err) {
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        logger.error('❌ Frame upload failed: %o', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/admin/frame/reset', verifyToken, async (req, res) => {
+    try {
+        const oldFrames = await Frame.find();
+        for (const f of oldFrames) {
+            // Strip leading slash if present to avoid absolute path joining issues
+            const relativePath = f.file_path.startsWith('/') ? f.file_path.substring(1) : f.file_path;
+            const oldPath = path.join(__dirname, '..', 'public', relativePath);
+            if (fs.existsSync(oldPath)) {
+                try { fs.unlinkSync(oldPath); } catch (e) { logger.error('Failed to delete old frame file: %o', e); }
+            }
+        }
+        await Frame.deleteMany({});
+        logger.info('🔄 Frame reset to default');
+        res.json({ message: 'Frame reset to default' });
+    } catch (err) {
+        logger.error('❌ Frame reset failed: %o', err);
         res.status(500).json({ error: err.message });
     }
 });

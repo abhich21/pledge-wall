@@ -9,57 +9,77 @@
         rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .success-box {
-            text-align: center;
-            padding-top: 40px;
+        .success-content {
+            padding-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
-        .pledge-preview {
-            margin: 30px auto;
-            transform: rotate(-2deg);
-            max-width: 280px;
+        .preview-container {
+            margin-bottom: 30px;
+            transform: rotate(-1deg);
+        }
+
+        .hashtag-text {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--primary-red);
+            margin-top: 10px;
+        }
+
+        .btn-stack {
+            width: 100%;
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
     </style>
 </head>
 
 <body>
-    <div class="container text-center">
-        <div class="success-box">
-            <h2 class="text-blue">Thank You!</h2>
-            <p style="font-weight: 500;">Your pledge has been added to the wall!</p>
-
-            <div class="pledge-preview">
+    <div class="container">
+        <div class="success-content">
+            <div class="preview-container">
                 <div class="polaroid-card">
                     <img id="finalPhoto" src="" alt="Pledge Photo" class="polaroid-image">
-                    <div class="polaroid-text">#BeTheChange ❤️</div>
+                    <div id="finalMessage" class="pledge-text"
+                        style="display:none; padding: 5px 10px 10px 10px; text-align:center; font-size:14px; font-weight:500;">
+                    </div>
                 </div>
             </div>
 
-            <h1 class="text-red text-italic" style="margin-bottom: 24px;">#BeTheChange</h1>
-
-            <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="btn-stack">
                 <button id="shareBtn" class="btn-primary" style="background: var(--primary-blue);">Share My
                     Pledge</button>
                 <a href="index.html" class="btn-primary">Make Another Pledge</a>
-                <a href="wall.html" class="btn-primary" style="background: #666;">View the Wall</a>
             </div>
         </div>
     </div>
 
-    <!-- Wave UI -->
-    <svg class="wave-footer" viewBox="0 0 1440 320" xmlns="http://www.w3.org/2000/svg">
-        <path fill="#003087"
-            d="M0,256L48,229.3C96,203,192,149,288,154.7C384,160,480,224,576,218.7C672,213,768,139,864,128C960,117,1056,171,1152,197.3C1248,224,1344,224,1392,224L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
-        </path>
-        <path fill="#D0021B"
-            d="M0,288L48,266.7C96,245,192,203,288,202.7C384,203,480,245,576,261.3C672,277,768,267,864,245.3C960,224,1056,192,1152,186.7C1248,181,1344,203,1392,213.3L1440,224L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"
-            style="opacity:0.8;"></path>
-    </svg>
+    <!-- Curvilinear Footer Waves -->
+    <div class="footer-waves">
+        <svg class="wave-svg" viewBox="0 0 1440 320" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#013188" d="M0,160 C320,300 1120,40 1440,240 L1440,320 L0,320 Z"></path>
+            <path fill="#D0021B" d="M0,220 C480,350 1200,100 1440,280 L1440,320 L0,320 Z" style="opacity:0.9;"></path>
+        </svg>
+    </div>
 
     <script>
+        // Security Check
         const photo = sessionStorage.getItem('last_photo');
-        if (photo) {
+        const msg = sessionStorage.getItem('pledge_msg');
+
+        if (!photo) {
+            window.location.href = 'index.html';
+        } else {
             document.getElementById('finalPhoto').src = photo;
+            const msgEl = document.getElementById('finalMessage');
+            if (msg) {
+                msgEl.textContent = `"${msg}"`;
+                msgEl.style.display = 'block';
+            }
         }
 
         document.getElementById('shareBtn').onclick = () => {

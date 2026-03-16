@@ -31,18 +31,48 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
         const activeFrame = await Frame.findOne({ is_active: true }).lean();
         const framePath = activeFrame ? path.join(__dirname, '../../public', activeFrame.file_path) : null;
 
-        // Photo processing with Jimp - Optimized for wall delivery
+        // Read user photo
         const image = await Jimp.read(photoPath);
-        image.cover(800, 800); // Smaller for grid performance, 1200 was overkill
 
         if (framePath && fs.existsSync(framePath)) {
             logger.debug('🖼️ Applying frame %s to Job: %s', activeFrame.name, jobId);
             const frame = await Jimp.read(framePath);
-            frame.resize(800, 800); // Match image dimensions
-            image.composite(frame, 0, 0); // Overlay frame ON TOP of photo
+
+            // Frame dimensions become the final image size
+            const fw = frame.bitmap.width;
+            const fh = frame.bitmap.height;
+
+            // The polaroid "window" (approximate percentages for standard polaroid)
+            const photoX = Math.round(fw * 0.09);
+            const photoY = Math.round(fh * 0.05);
+            const photoW = Math.round(fw * 0.82);
+            const photoH = Math.round(fh * 0.71);
+
+            // Resize user photo to fill the window area
+            image.cover(photoW, photoH);
+
+            // Create blank white canvas at frame size
+            const finalImg = await new Promise((resolve, reject) => {
+                new Jimp(fw, fh, 0xFFFFFFFF, (err, img) => {
+                    if (err) reject(err);
+                    else resolve(img);
+                });
+            });
+
+            // 1. Place photo inside the polaroid window
+            finalImg.composite(image, photoX, photoY);
+            // 2. Overlay frame on top (transparent center reveals photo)
+            finalImg.composite(frame, 0, 0);
+
+            // Resize for web delivery and save
+            finalImg.resize(800, Jimp.AUTO);
+            await finalImg.quality(80).writeAsync(finalPath);
+        } else {
+            // No frame available: just resize and save
+            image.cover(800, 800);
+            await image.quality(80).writeAsync(finalPath);
         }
 
-        await image.quality(75).writeAsync(finalPath); // 75 is the sweet spot for web
         logger.debug('💾 Image optimized and saved: %s', photoUrl);
 
         // Save to MongoDB
@@ -61,10 +91,11 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
         // Update cache
         cache.addPhoto(photoObj);
 
-        // Notify wall
+        // Notify wall and admin
         if (io) {
             io.of('/wall').emit('new_photo', photoObj);
-            logger.debug('📣 Socket event emitted to /wall for Job: %s', jobId);
+            io.of('/admin').emit('new_photo', photoObj);
+            logger.debug('📣 Socket events emitted to /wall and /admin for Job: %s', jobId);
         }
 
         jobs.set(jobId, { status: 'done', photo: photoObj });

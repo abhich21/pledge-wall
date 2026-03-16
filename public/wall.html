@@ -122,8 +122,7 @@
             div.innerHTML = `
                 <div class="polaroid-card">
                     <img src="${photo.photo_url}" class="polaroid-image" loading="lazy">
-                    <div class="author-name">#BeTheChange ❤️</div>
-                    ${photo.message ? `<div class="pledge-text">"${photo.message}"</div>` : ''}
+                    ${photo.message ? `<div class="pledge-text" style="display:block; padding: 5px 0 10px 0; text-align:center;">"${photo.message}"</div>` : ''}
                 </div>
             `;
             return div;
@@ -139,7 +138,7 @@
         }
 
         socket.on('new_photo', (photo) => {
-            if (!photos.find(p => p.id === photo.id)) {
+            if (!photos.find(p => p._id.toString() === photo._id.toString())) {
                 photos.push(photo);
                 addPhotoToGrid(photo);
                 updateStats();
@@ -148,8 +147,9 @@
         });
 
         socket.on('photo_deleted', (payload) => {
-            photos = photos.filter(p => p.id !== parseInt(payload.id));
-            const el = document.getElementById(`photo-${payload.id}`);
+            const photoId = payload.id.toString();
+            photos = photos.filter(p => (p._id || p.id).toString() !== photoId);
+            const el = document.getElementById(`photo-${photoId}`);
             if (el) {
                 el.style.transform = 'scale(0)';
                 el.style.opacity = '0';
