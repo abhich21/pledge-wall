@@ -1,6 +1,6 @@
 node_modules/
 .env
-uploads/
+# uploads/
 pledge-wall.db
 pledge-wall.json
 .DS_Store
