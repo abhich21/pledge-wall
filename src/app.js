@@ -13,6 +13,7 @@ const Pledge = require('./models/Pledge');
 const Frame = require('./models/Frame');
 const cache = require('./services/cache');
 const queue = require('./services/queue');
+const Job = require('./models/Job');
 
 const app = express();
 
@@ -101,7 +102,7 @@ app.get('/api/frame/active', async (req, res) => {
     }
 });
 
-app.post('/api/upload', uploadLimiter, upload.single('photo'), (req, res) => {
+app.post('/api/upload', uploadLimiter, upload.single('photo'), async (req, res) => {
     try {
         const { name, organisation, message } = req.body;
 
@@ -113,7 +114,7 @@ app.post('/api/upload', uploadLimiter, upload.single('photo'), (req, res) => {
 
         if (!req.file) return res.status(400).json({ error: 'Photo required' });
 
-        const jobId = queue.addJob({
+        const jobId = await queue.addJob({
             name, organisation, message,
             photoPath: req.file.path,
             io: app.get('socketio')
@@ -125,10 +126,18 @@ app.post('/api/upload', uploadLimiter, upload.single('photo'), (req, res) => {
     }
 });
 
-app.get('/api/upload/status/:jobId', (req, res) => {
-    const status = queue.getJobStatus(req.params.jobId);
-    if (!status) return res.status(404).json({ error: 'Not found' });
-    res.json(status);
+app.get('/api/upload/status/:jobId', async (req, res) => {
+    try {
+        const job = await Job.findOne({ jobId: req.params.jobId }).lean();
+        if (!job) return res.status(404).json({ error: 'Job not found' });
+
+        res.json({
+            ...job,
+            queueSize: queue.getQueueSize()
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Admin
@@ -193,14 +202,16 @@ app.patch('/api/admin/photos/:id/status', verifyToken, async (req, res) => {
 
         const io = app.get('socketio');
         if (status === 'approved') {
-            cache.addPhoto(photo);
+            cache.addPhoto(photo); // Add to THIS worker's cache
             if (io) {
+                io.serverSideEmit('add_to_cache', photo); // Sync to OTHER workers
                 io.of('/wall').emit('new_photo', photo);
                 io.of('/admin').emit('photo_updated', photo);
             }
         } else {
-            cache.removePhoto(id);
+            cache.removePhoto(id); // Remove from THIS worker's cache
             if (io) {
+                io.serverSideEmit('remove_from_cache', id); // Sync to OTHER workers
                 io.of('/wall').emit('photo_deleted', { id });
                 io.of('/admin').emit('photo_updated', photo);
             }
@@ -215,9 +226,11 @@ app.patch('/api/admin/photos/:id/status', verifyToken, async (req, res) => {
 app.post('/api/admin/photos/archive-all', verifyToken, async (req, res) => {
     try {
         await Pledge.updateMany({ status: 'approved' }, { status: 'archived' });
-        cache.clearCache(); // Archive all effectively clears what's on the wall
         const io = app.get('socketio');
-        if (io) io.of('/wall').emit('wall_cleared');
+        if (io) {
+            io.serverSideEmit('clear_cache');
+            io.of('/wall').emit('wall_cleared');
+        }
         logger.info('📦 All approved photos archived');
         res.json({ message: 'All photos archived' });
     } catch (err) {
@@ -234,9 +247,11 @@ app.delete('/api/admin/photos/delete-all', verifyToken, async (req, res) => {
             if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
         }
         await Pledge.deleteMany({});
-        cache.clearCache();
         const io = app.get('socketio');
-        if (io) io.of('/wall').emit('wall_cleared');
+        if (io) {
+            io.serverSideEmit('clear_cache');
+            io.of('/wall').emit('wall_cleared');
+        }
         logger.info('🗑️ All photos deleted from DB and Disk');
         res.json({ message: 'All photos deleted' });
     } catch (err) {

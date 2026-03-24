@@ -44,6 +44,14 @@
                 <input type="text" id="userOrg" class="input-field" placeholder="Enter full organisation name">
             </div>
 
+            <div class="input-group">
+                <label class="input-label" style="display: flex; justify-content: space-between;">
+                    <span>Message</span>
+                    <span id="wordCount" style="font-size: 12px; font-weight: normal; color: #666;">0/20 words</span>
+                </label>
+                <textarea id="userMsg" class="input-field" placeholder="Write a short message or pledge..." rows="3" style="resize: none;"></textarea>
+            </div>
+
             <button type="submit" class="btn-primary" style="margin-top: 10px;">Take Photo</button>
         </form>
     </div>
@@ -58,16 +66,35 @@
 
     <script>
         const form = document.getElementById('pledgeForm');
+        const msgInput = document.getElementById('userMsg');
+        const wordCountDisplay = document.getElementById('wordCount');
+
+        // Word counter logic
+        msgInput.addEventListener('input', function() {
+            let words = this.value.trim().split(/\s+/).filter(word => word.length > 0);
+            
+            if (words.length > 20) {
+                // Trim to 20 words
+                words = words.slice(0, 20);
+                this.value = words.join(" ") + " ";
+                this.style.borderColor = "var(--primary-red)";
+            } else {
+                this.style.borderColor = "#ddd";
+            }
+            
+            wordCountDisplay.textContent = `${words.length}/20 words`;
+            wordCountDisplay.style.color = words.length === 20 ? "var(--primary-red)" : "#666";
+        });
 
         form.addEventListener('submit', (e) => {
             e.preventDefault();
             const name = document.getElementById('userName').value.trim();
             const org = document.getElementById('userOrg').value.trim();
+            const msg = document.getElementById('userMsg').value.trim();
 
             sessionStorage.setItem('pledge_name', name);
             sessionStorage.setItem('pledge_org', org);
-            // Default message placeholder for now since it's not in the mockup but in DB
-            sessionStorage.setItem('pledge_msg', "");
+            sessionStorage.setItem('pledge_msg', msg); // Saves the actual message
 
             window.location.href = 'camera.html';
         });

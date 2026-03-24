@@ -138,27 +138,93 @@
             photos.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
             const fragment = document.createDocumentFragment();
-            photos.forEach(photo => {
-                const el = createPhotoElement(photo);
+            photos.forEach((photo, index) => {
+                const el = createPhotoElement(photo, index);
                 fragment.appendChild(el);
             });
             grid.appendChild(fragment);
             updateStats();
         }
 
-        function createPhotoElement(photo) {
+        // --- Grid-first layout engine ---
+        let occupiedCells = new Set();
+        let gridCols = 0;
+        let gridRows = 0;
+
+        function computeGrid() {
+            const cardWidth = calculateCardSize(photos.length);
+            const padding = 10;
+            const cellW = cardWidth + padding;
+            const cellH = (cardWidth * 1.3) + padding; // polaroid aspect ratio
+            const wallW = grid.clientWidth;
+            const wallH = grid.clientHeight;
+            gridCols = Math.floor(wallW / cellW);
+            gridRows = Math.floor(wallH / cellH);
+            return { cellW, cellH, wallW, wallH };
+        }
+
+        // --- Seeded PRNG Engine (Mulberry32) ---
+        // Generates deterministic "random" numbers based on a hash of the photo _id.
+        function xmur3(str) {
+            for(var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) {
+                h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+                h = h << 13 | h >>> 19;
+            } return function() {
+                h = Math.imul(h ^ (h >>> 16), 2246822507);
+                h = Math.imul(h ^ (h >>> 13), 3266489909);
+                return (h ^= h >>> 16) >>> 0;
+            }
+        }
+
+        function mulberry32(a) {
+            return function() {
+                var t = a += 0x6D2B79F5;
+                t = Math.imul(t ^ t >>> 15, t | 1);
+                t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
+        function getSeededRandom(seedStr) {
+            const seed = xmur3(seedStr)();
+            return mulberry32(seed);
+        }
+
+        function getGridPosition(index, randomFn) {
+            const { cellW, cellH, wallW, wallH } = computeGrid();
+            const totalCells = gridCols * gridRows;
+
+            if (index < totalCells) {
+                // Grid placement: fill cells in order
+                const col = index % gridCols;
+                const row = Math.floor(index / gridCols);
+                // Add small seeded jitter for natural feel (±10px)
+                const jitterX = (randomFn() * 20 - 10);
+                const jitterY = (randomFn() * 20 - 10);
+                const left = (col * cellW) + jitterX;
+                const top = (row * cellH) + jitterY;
+                return { left: Math.max(0, left), top: Math.max(0, top) };
+            } else {
+                // Grid is FULL → seeded overlap mode
+                const left = randomFn() * (wallW - cellW);
+                const top = randomFn() * (wallH - cellH);
+                return { left, top };
+            }
+        }
+
+        function createPhotoElement(photo, index) {
             const div = document.createElement('div');
             div.className = 'wall-item';
             div.id = `photo-${photo._id}`;
 
-            const rotation = (Math.random() * 20 - 10).toFixed(2);
+            // Initialize seeded PRNG for this specific photo
+            const randomFn = getSeededRandom(photo._id.toString());
 
-            // Randomly scatter, keeping 10% margin to prevent edge cutoffs
-            const left = (Math.random() * 80 + 5).toFixed(2);
-            const top = (Math.random() * 75 + 5).toFixed(2);
+            const rotation = (randomFn() * 10 - 5).toFixed(2); // subtle rotation
+            const pos = getGridPosition(index, randomFn);
 
-            div.style.left = `${left}%`;
-            div.style.top = `${top}%`;
+            div.style.left = `${pos.left}px`;
+            div.style.top = `${pos.top}px`;
             div.style.zIndex = baseZIndex++;
             div.style.setProperty('--rotation', `${rotation}deg`);
 
@@ -176,7 +242,7 @@
 
         function addPhotoToGrid(photo) {
             updateDynamicLayout();
-            const el = createPhotoElement(photo);
+            const el = createPhotoElement(photo, photos.length - 1);
             grid.appendChild(el);
         }
 

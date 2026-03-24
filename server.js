@@ -25,18 +25,7 @@ const logRoutes = (port) => {
 const startServer = async () => {
     const PORT = process.env.PORT || 3000;
 
-    // Connect DB and Init Cache for the current process (Master or Single)
-    await connectDB();
-    await cache.initCache();
-
-    if (numCPUs <= 1) {
-        logger.info('⚙️ Single core detected. Running in single-process mode.');
-        logRoutes(PORT);
-        runWorker();
-        return;
-    }
-
-    if (cluster.isMaster) {
+    if (cluster.isMaster && numCPUs > 1) {
         logger.info(`🏰 Master Process ${process.pid} is running (Detected ${numCPUs} cores)`);
         logRoutes(PORT);
 
@@ -53,45 +42,69 @@ const startServer = async () => {
             cluster.fork();
         });
     } else {
-        // Redundant call for clarity in clustered workers
-        runWorker();
+        // Worker Process (or Single Core)
+        runWorker(PORT);
     }
 };
 
-const runWorker = () => {
-    const server = http.createServer(app);
-    const io = new Server(server, {
-        cors: { origin: "*" },
-        transports: ['websocket'],
-        pingTimeout: 30000,
-        pingInterval: 25000,
-        maxHttpBufferSize: 1e6,
-        connectionStateRecovery: {
-            maxDisconnectionDuration: 2 * 60 * 1000,
-            skipMiddlewares: true,
-        }
-    });
+const runWorker = async (PORT) => {
+    try {
+        // 1. Wait for DB and Cache BEFORE starting anything else
+        await connectDB();
+        await cache.initCache();
 
-    // Setup cluster adapter to sync across workers
-    io.adapter(createAdapter());
+        const server = http.createServer(app);
+        const io = new Server(server, {
+            cors: { origin: "*" },
+            transports: ['websocket'],
+            pingTimeout: 30000,
+            pingInterval: 25000,
+            maxHttpBufferSize: 1e6,
+            connectionStateRecovery: {
+                maxDisconnectionDuration: 2 * 60 * 1000,
+                skipMiddlewares: true,
+            }
+        });
 
-    // Provide the io instance to Express app
-    app.set('socketio', io);
+        // Setup cluster adapter to sync across workers
+        io.adapter(createAdapter());
 
-    io.of('/wall').on('connection', (socket) => {
-        logger.debug(`📡 Socket connected to /wall: ${socket.id}`);
-        socket.join('wall');
-    });
+        // Provide the io instance to Express app
+        app.set('socketio', io);
 
-    io.of('/admin').on('connection', (socket) => {
-        logger.debug(`🔐 Admin Socket connected: ${socket.id}`);
-        socket.join('admin');
-    });
+        io.of('/wall').on('connection', (socket) => {
+            logger.debug(`📡 Socket connected to /wall: ${socket.id}`);
+            socket.join('wall');
+        });
 
-    const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => {
-        logger.info(`🚀 ${cluster.isMaster ? 'Single-Process' : 'Worker ' + process.pid} started at http://localhost:${PORT}`);
-    });
+        io.of('/admin').on('connection', (socket) => {
+            logger.debug(`🔐 Admin Socket connected: ${socket.id}`);
+            socket.join('admin');
+        });
+
+        // --- NEW: Cluster-wide Cache Sync ---
+        io.on('add_to_cache', (photo) => {
+            logger.debug('📦 [Cluster Sync] Adding to local cache: %s', photo._id);
+            cache.addPhoto(photo);
+        });
+
+        io.on('remove_from_cache', (id) => {
+            logger.debug('📦 [Cluster Sync] Removing from local cache: %s', id);
+            cache.removePhoto(id);
+        });
+
+        io.on('clear_cache', () => {
+            logger.debug('📦 [Cluster Sync] Clearing local cache');
+            cache.clearCache();
+        });
+
+        server.listen(PORT, () => {
+            logger.info(`🚀 ${cluster.isMaster ? 'Single-Process' : 'Worker ' + process.pid} started at http://localhost:${PORT}`);
+        });
+    } catch (err) {
+        logger.error(`❌ Worker failed to start: ${err.message}`);
+        process.exit(1);
+    }
 };
 
 startServer().catch(err => {

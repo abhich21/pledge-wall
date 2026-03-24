@@ -12,12 +12,14 @@ const queue = new PQueue({ concurrency: 5 });
 
 const jobs = new Map();
 
+const Job = require('../models/Job');
+
 /**
  * Processes the photo: composites frame, saves to MongoDB, updates cache, emits socket.
  */
 const processPhoto = async (jobId, { name, organisation, message, photoPath, io }) => {
-    jobs.set(jobId, { status: 'processing', progress: 0 });
     logger.info('⚙️ Starting processing for Job: %s (User: %s)', jobId, name);
+    await Job.findOneAndUpdate({ jobId }, { status: 'processing' });
 
     try {
         const uploadsDir = path.join(__dirname, '../../uploads/photos');
@@ -88,33 +90,32 @@ const processPhoto = async (jobId, { name, organisation, message, photoPath, io 
         const photoObj = savedPledge.toObject();
         logger.info('📝 Pledge saved to Database: %s', photoObj._id);
 
-        // Update cache
-        cache.addPhoto(photoObj);
-
-        // Notify wall and admin
+        // Notify wall and admin + cluster-wide cache update
+        cache.addPhoto(photoObj); // Add to THIS worker's cache
         if (io) {
+            io.serverSideEmit('add_to_cache', photoObj); // Sync to OTHER workers
             io.of('/wall').emit('new_photo', photoObj);
             io.of('/admin').emit('new_photo', photoObj);
-            logger.debug('📣 Socket events emitted to /wall and /admin for Job: %s', jobId);
+            logger.debug('📣 Socket events emitted for Job: %s', jobId);
         }
 
-        jobs.set(jobId, { status: 'done', photo: photoObj });
-        logger.info('✅ Processing completed successfully for Job: %s', jobId);
+        await Job.findOneAndUpdate({ jobId }, { status: 'done', photo: photoObj });
 
         // Clean up temp upload
         if (fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
 
     } catch (err) {
         logger.error('❌ Queue processing error for Job %s: %o', jobId, err);
-        jobs.set(jobId, { status: 'error', error: err.message });
+        await Job.findOneAndUpdate({ jobId }, { status: 'error', error: err.message });
     }
 };
 
-const addJob = (jobData) => {
+const addJob = async (jobData) => {
     const jobId = `job_${Date.now()}_${Math.round(Math.random() * 1e9)}`;
-    jobs.set(jobId, { status: 'queued' });
-    logger.info('📥 Job queued: %s (Queue size: %d)', jobId, queue.size + 1);
+    const newJob = new Job({ jobId, status: 'queued' });
+    await newJob.save();
 
+    logger.info('📥 Job queued: %s (Queue size: %d)', jobId, queue.size + 1);
     queue.add(() => processPhoto(jobId, jobData));
 
     return jobId;
@@ -122,7 +123,10 @@ const addJob = (jobData) => {
 
 const getJobStatus = (jobId) => jobs.get(jobId);
 
+const getQueueSize = () => queue.size + queue.pending;
+
 module.exports = {
     addJob,
-    getJobStatus
+    getJobStatus,
+    getQueueSize
 };

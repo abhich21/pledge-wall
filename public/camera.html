@@ -274,10 +274,45 @@
             startCamera();
         };
 
-        // UPLOAD: Send raw photo to server (server applies frame)
+        // UPLOAD: Send resized photo to server (server applies frame)
         uploadBtn.onclick = async () => {
+            const loading = document.getElementById('loading');
+            const statusText = document.createElement('div');
+            statusText.id = 'queueStatus';
+            statusText.style.color = 'white';
+            statusText.style.marginTop = '10px';
+            statusText.style.fontSize = '14px';
+
             loading.classList.remove('hidden');
-            rawCanvas.toBlob(async (blob) => {
+            loading.querySelector('.spinner').after(statusText);
+            statusText.textContent = 'Optimizing photo...';
+
+            // 1. Client-side resize (Target: Max 1000px)
+            const MAX_DIM = 1000;
+            let width = rawCanvas.width;
+            let height = rawCanvas.height;
+
+            if (width > height) {
+                if (width > MAX_DIM) {
+                    height *= MAX_DIM / width;
+                    width = MAX_DIM;
+                }
+            } else {
+                if (height > MAX_DIM) {
+                    width *= MAX_DIM / height;
+                    height = MAX_DIM;
+                }
+            }
+
+            const scaleCanvas = document.createElement('canvas');
+            scaleCanvas.width = width;
+            scaleCanvas.height = height;
+            scaleCanvas.getContext('2d').drawImage(rawCanvas, 0, 0, width, height);
+
+            statusText.textContent = 'Uploading...';
+
+            // 2. Convert to smaller blob and upload
+            scaleCanvas.toBlob(async (blob) => {
                 const formData = new FormData();
                 formData.append('photo', blob, 'pledge.jpg');
                 formData.append('name', sessionStorage.getItem('pledge_name'));
@@ -288,16 +323,26 @@
                     const res = await fetch('/api/upload', { method: 'POST', body: formData });
                     const data = await res.json();
                     if (data.jobId) pollStatus(data.jobId);
-                    else { alert(data.error || 'Upload failed'); loading.classList.add('hidden'); }
-                } catch (err) { alert('Upload failed. Try again.'); loading.classList.add('hidden'); }
-            }, 'image/jpeg', 0.9);
+                    else {
+                        alert(data.error || 'Upload failed');
+                        loading.classList.add('hidden');
+                        statusText.remove();
+                    }
+                } catch (err) {
+                    alert('Upload failed. Try again.');
+                    loading.classList.add('hidden');
+                    statusText.remove();
+                }
+            }, 'image/jpeg', 0.85);
         };
 
         async function pollStatus(jobId) {
+            const statusText = document.getElementById('queueStatus');
             const interval = setInterval(async () => {
                 try {
                     const res = await fetch(`/api/upload/status/${jobId}`);
                     const data = await res.json();
+
                     if (data.status === 'done') {
                         clearInterval(interval);
                         sessionStorage.setItem('last_photo', data.photo.photo_url);
@@ -306,11 +351,20 @@
                         clearInterval(interval);
                         alert('Processing error: ' + data.error);
                         loading.classList.add('hidden');
+                        statusText.remove();
+                    } else if (data.status === 'queued' || data.status === 'processing') {
+                        // Display queue position if provided by server
+                        if (data.queueSize !== undefined) {
+                            statusText.textContent = `Processing... (Queue position: ${data.queueSize})`;
+                        } else {
+                            statusText.textContent = 'Processing in queue...';
+                        }
                     }
                 } catch (e) {
                     clearInterval(interval);
                     alert('Connection error');
                     loading.classList.add('hidden');
+                    statusText.remove();
                 }
             }, 2000);
         }
