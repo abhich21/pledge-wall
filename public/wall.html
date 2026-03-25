@@ -16,7 +16,6 @@
             margin: 0;
             padding: 0 !important;
             overflow: hidden;
-            /* Lock scroll */
         }
 
         .wall-header h1 {
@@ -147,7 +146,6 @@
             updateStats();
         }
 
-        // --- Grid-first layout engine ---
         let occupiedCells = new Set();
         let gridCols = 0;
         let gridRows = 0;
@@ -164,8 +162,7 @@
             return { cellW, cellH, wallW, wallH };
         }
 
-        // --- Seeded PRNG Engine (Mulberry32) ---
-        // Generates deterministic "random" numbers based on a hash of the photo _id.
+    
         function xmur3(str) {
             for(var i = 0, h = 1779033703 ^ str.length; i < str.length; i++) {
                 h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
@@ -196,10 +193,8 @@
             const totalCells = gridCols * gridRows;
 
             if (index < totalCells) {
-                // Grid placement: fill cells in order
                 const col = index % gridCols;
                 const row = Math.floor(index / gridCols);
-                // Add small seeded jitter for natural feel (±10px)
                 const jitterX = (randomFn() * 20 - 10);
                 const jitterY = (randomFn() * 20 - 10);
                 const left = (col * cellW) + jitterX;
