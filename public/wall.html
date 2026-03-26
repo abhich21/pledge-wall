@@ -188,13 +188,41 @@
             return mulberry32(seed);
         }
 
+        // --- Global Deterministic Shuffle for Random Cell Placement ---
+        let shuffledCells = [];
+        let previousTotalCells = 0;
+
+        // A globally seeded PRNG for generating the cell filling sequence
+        function getGlobalSeededRandom() {
+            return mulberry32(xmur3("wall-layout-seed-v1")());
+        }
+
+        function updateShuffledCells(totalCells) {
+            if (totalCells === previousTotalCells) return;
+            previousTotalCells = totalCells;
+            shuffledCells = Array.from({length: totalCells}, (_, i) => i);
+            const rng = getGlobalSeededRandom();
+            // Fisher-Yates shuffle with seeded PRNG
+            for (let i = totalCells - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                const temp = shuffledCells[i];
+                shuffledCells[i] = shuffledCells[j];
+                shuffledCells[j] = temp;
+            }
+        }
+
         function getGridPosition(index, randomFn) {
             const { cellW, cellH, wallW, wallH } = computeGrid();
             const totalCells = gridCols * gridRows;
+            
+            updateShuffledCells(totalCells);
 
             if (index < totalCells) {
-                const col = index % gridCols;
-                const row = Math.floor(index / gridCols);
+                // Get a deterministically randomized cell
+                const cellIndex = shuffledCells[index];
+                const col = cellIndex % gridCols;
+                const row = Math.floor(cellIndex / gridCols);
+                // Add small seeded jitter for natural feel (±10px)
                 const jitterX = (randomFn() * 20 - 10);
                 const jitterY = (randomFn() * 20 - 10);
                 const left = (col * cellW) + jitterX;
