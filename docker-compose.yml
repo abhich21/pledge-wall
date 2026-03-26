@@ -21,7 +21,7 @@ services:
       - "traefik.http.services.pledge-wall.loadbalancer.server.port=3000"
 
   mongo:
-    image: mongo:7
+    image: mongo:4.4
     container_name: pledge-wall-mongo
     restart: unless-stopped
     volumes:
@@ -29,9 +29,10 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 15s
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
       timeout: 5s
+      start_period: 60s
       retries: 5
 
 networks:
