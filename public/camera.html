@@ -40,6 +40,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transform: scaleX(-1); /* Mirror effect */
         }
 
         .shutter-btn {
@@ -108,15 +109,25 @@
             z-index: 2;
         }
 
-        .preview-message {
-            width: 100%;
-            padding: 5px 10px 10px 10px;
+        .preview-details {
+            padding: 10px;
+            background: white;
             text-align: center;
-            font-size: 14px;
-            font-weight: 500;
-            color: #333;
-            min-height: 20px;
-            word-wrap: break-word;
+            width: 100%;
+        }
+
+        .author-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary-blue);
+        }
+
+        .pledge-text {
+            font-size: 12px;
+            line-height: 1.2;
+            color: #666;
+            margin-top: 4px;
+            font-style: italic;
         }
 
         .retake-btn-wrap {
@@ -165,10 +176,13 @@
             <div id="polaroidContainer" class="polaroid-preview">
                 <div class="photo-frame">
                     <img id="capturedPhoto" src="" alt="Your Photo" class="user-photo">
-                    <img id="frameOverlay" src="/assets/default-frame.png" alt="Frame" class="frame-overlay">
+                    <img id="frameOverlay" src="../uploads/frames/frame_1773639690363.png" alt="Frame" class="frame-overlay">
                 </div>
-                <!-- Dynamic user message will appear here -->
-                <div id="previewMessage" class="preview-message"></div>
+                <!-- Dynamic user details will appear here -->
+                <div class="preview-details">
+                    <div id="previewName" class="author-name"></div>
+                    <div id="previewMessage" class="pledge-text"></div>
+                </div>
                 <div class="retake-btn-wrap">
                     <button id="retake" class="btn-retake">Retake <span style="font-size:16px;">↻</span></button>
                 </div>
@@ -237,12 +251,15 @@
 
         // SHUTTER: Capture photo, show framed preview
         shutter.onclick = () => {
-            // Capture raw photo to hidden canvas
+            // Capture raw photo to hidden canvas (mirrored to match preview)
             const vw = video.videoWidth || 720;
             const vh = video.videoHeight || 960;
             rawCanvas.width = vw;
             rawCanvas.height = vh;
-            rawCanvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
+            const ctx = rawCanvas.getContext('2d');
+            ctx.translate(vw, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, vw, vh);
 
             // Stop camera
             if (stream) {
@@ -252,8 +269,11 @@
             // Show captured photo inside the HTML polaroid card
             capturedPhoto.src = rawCanvas.toDataURL('image/jpeg', 0.9);
 
-            // Set user message preview
+            // Set user message and name preview
+            const name = sessionStorage.getItem('pledge_name');
             const msg = sessionStorage.getItem('pledge_msg');
+            
+            document.getElementById('previewName').textContent = name;
             const msgEl = document.getElementById('previewMessage');
             if (msg) {
                 msgEl.textContent = `"${msg}"`;

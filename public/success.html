@@ -42,10 +42,11 @@
     <div class="container">
         <div class="success-content">
             <div class="preview-container">
-                <div class="polaroid-card">
-                    <img id="finalPhoto" src="" alt="Pledge Photo" class="polaroid-image">
-                    <div id="finalMessage" class="pledge-text"
-                        style="display:none; padding: 5px 10px 10px 10px; text-align:center; font-size:14px; font-weight:500;">
+                <div class="polaroid-card" style="box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 4px; overflow: hidden; background: white;">
+                    <img id="finalPhoto" src="" alt="Pledge Photo" class="polaroid-image" style="width: 100%; display: block;">
+                    <div style="padding: 15px 10px; text-align: center;">
+                        <div id="finalName" style="font-size: 18px; color: var(--primary-blue); font-weight: 700;"></div>
+                        <div id="finalMessage" style="font-size: 14px; color: #666; font-style: italic; margin-top: 5px; display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -69,12 +70,15 @@
     <script>
         // Security Check
         const photo = sessionStorage.getItem('last_photo');
+        const name = sessionStorage.getItem('pledge_name');
         const msg = sessionStorage.getItem('pledge_msg');
 
         if (!photo) {
             window.location.href = 'index.html';
         } else {
             document.getElementById('finalPhoto').src = photo;
+            document.getElementById('finalName').textContent = name;
+            
             const msgEl = document.getElementById('finalMessage');
             if (msg) {
                 msgEl.textContent = `"${msg}"`;
