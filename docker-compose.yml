@@ -1,0 +1,46 @@
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY}:${IMAGE_TAG:-latest}
+    container_name: pledge-wall-app
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - uploads_data:/app/uploads
+      - logs_data:/app/logs
+    networks:
+      - proxy
+      - internal
+    depends_on:
+      mongo:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pledge-wall.rule=Host(`pledge.2209.in`)"
+      - "traefik.http.routers.pledge-wall.entrypoints=websecure"
+      - "traefik.http.routers.pledge-wall.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pledge-wall.loadbalancer.server.port=3000"
+
+  mongo:
+    image: mongo:7
+    container_name: pledge-wall-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  proxy:
+    external: true
+  internal:
+    driver: bridge
+
+volumes:
+  uploads_data:
+  mongo_data:
+  logs_data:
