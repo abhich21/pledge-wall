@@ -5,3 +5,4 @@ pledge-wall.db
 pledge-wall.json
 .DS_Store
 *.log
+.last-good-tag

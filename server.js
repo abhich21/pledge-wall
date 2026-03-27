@@ -10,7 +10,7 @@ const cache = require('./src/services/cache');
 const logger = require('./src/utils/logger');
 
 const logRoutes = (port) => {
-    const baseUrl = `http://localhost:${port}`;
+    const baseUrl = process.env.APP_URL || `http://localhost:${port}`;
     logger.info('--- Frontend Routes ---');
     logger.info(`🏠 Home:      ${baseUrl}/`);
     logger.info(`📝 Pledge:    ${baseUrl}/pledge`);
