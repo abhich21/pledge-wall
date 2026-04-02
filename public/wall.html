@@ -61,7 +61,7 @@
         }
 
         .author-name {
-            font-size: 10px;
+            font-size: 12px;
             font-weight: 700;
             margin-top: 3px;
             color: var(--primary-blue);
@@ -69,7 +69,7 @@
         }
 
         .pledge-text {
-            font-size: 8px;
+            font-size: 10px;
             line-height: 1.1;
             color: #666;
             margin-top: 2px;
@@ -255,7 +255,7 @@
             div.innerHTML = `
                 <div class="polaroid-card">
                     <img src="${photo.photo_url}" class="polaroid-image" loading="lazy">
-                    <div style="padding: 2px 5px 4px; background: white;">
+                    <div style="padding: 0px 5px 4px; background: white;">
                         <div class="author-name">${photo.name}</div>
                         ${photo.message ? `<div class="pledge-text">"${photo.message}"</div>` : ''}
                     </div>
