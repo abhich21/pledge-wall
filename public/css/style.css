@@ -167,6 +167,7 @@ textarea.input-field {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     border-radius: 4px;
     overflow: hidden;
+    background-color: white;
 }
 
 .polaroid-image {
